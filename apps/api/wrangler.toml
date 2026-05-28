@@ -1,25 +1,39 @@
 name = "chiyan-api"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
+# nodejs_compat 不可关：bcryptjs 依赖 Buffer polyfill；移除会导致 hash 在 Workers 运行时炸
 compatibility_flags = ["nodejs_compat"]
-
-# Phase 0：只起 /health。Phase 1 起按 docs/开发计划.md §四 接入 Neon / Upstash / R2 / 秘钥。
 
 [observability]
 enabled = true
 
 # ---------- dev ----------
-# 本地通过 `pnpm dev:api` 起；环境变量从 .dev.vars 读取（gitignore 中）。
+# 本地通过 `pnpm dev:api` 起；secrets 从 .dev.vars 读取（在 .gitignore 内）。
+# vars 这里给 dev 默认值。
+[vars]
+ENV = "dev"
+# JSON 数组字符串，**双引号**不要漏。dev 时含 vite 5173 / 5174 + workers 自己 8787
+ALLOWED_ORIGINS = '["http://localhost:5173","http://localhost:5174","http://localhost:8787"]'
 
 # ---------- staging ----------
 [env.staging]
 name = "chiyan-api-staging"
-# routes = [{ pattern = "api-staging.example.com/*", custom_domain = true }]
+# Phase 1 Step 7（账号到位）后接入：
+# 1. routes / custom_domain
+# 2. wrangler secret put DATABASE_URL / UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN /
+#    JWT_SECRET / ENC_KEY_V1 --env staging
+# 3. vars.ALLOWED_ORIGINS 改成 staging 域名（仍是 JSON 数组字符串）
+# routes = [{ pattern = "api-staging.chiyan.example.com/*", custom_domain = true }]
+
+[env.staging.vars]
+ENV = "staging"
+ALLOWED_ORIGINS = '[]'
 
 # ---------- production ----------
 [env.production]
 name = "chiyan-api"
-# routes = [{ pattern = "api.example.com/*", custom_domain = true }]
+# routes = [{ pattern = "api.chiyan.example.com/*", custom_domain = true }]
 
-# Phase 1 起补：
-# [[r2_buckets]] / [[kv_namespaces]] / [vars] / [secrets via wrangler secret put]
+[env.production.vars]
+ENV = "production"
+ALLOWED_ORIGINS = '[]'

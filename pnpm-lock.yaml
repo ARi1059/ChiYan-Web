@@ -66,12 +66,18 @@ importers:
       '@chiyan/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@hono/zod-validator':
+        specifier: ^0.8.0
+        version: 0.8.0(hono@4.12.23)(zod@3.25.76)
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
       hono:
         specifier: ^4.6.14
         version: 4.12.23
+      nanoid:
+        specifier: ^5.1.11
+        version: 5.1.11
       otpauth:
         specifier: ^9.5.1
         version: 9.5.1
@@ -1204,6 +1210,12 @@ packages:
   '@fastify/busboy@2.1.1':
     resolution: {integrity: sha512-vBZP4NlzfOlerQTnba4aqZoMhE/a9HY7HRqoOPaETQcSQuWEIyZMHGfVu6w9wGtGK5fED5qRs2DteVCjOH60sA==}
     engines: {node: '>=14'}
+
+  '@hono/zod-validator@0.8.0':
+    resolution: {integrity: sha512-5uS4S1/LKtZQYvD4BtpPUFkOv8d1wNxHHrChm26buMiEYc1FrHWvDUaKVBwkiVtvSExHSpLGDvcnpI2Copyj9w==}
+    peerDependencies:
+      hono: '>=4.10.0'
+      zod: ^3.25.0 || ^4.0.0
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -2636,6 +2648,11 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
+  nanoid@5.1.11:
+    resolution: {integrity: sha512-v+KEsUv2ps74PaSKv0gHTxTCgMXOIfBEbaqa6w6ISIGC7ZsvHN4N9oJ8d4cmf0n5oTzQz2SLmThbQWhjd/8eKg==}
+    engines: {node: ^18 || >=20}
+    hasBin: true
+
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
 
@@ -3926,6 +3943,11 @@ snapshots:
       levn: 0.4.1
 
   '@fastify/busboy@2.1.1': {}
+
+  '@hono/zod-validator@0.8.0(hono@4.12.23)(zod@3.25.76)':
+    dependencies:
+      hono: 4.12.23
+      zod: 3.25.76
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -5443,6 +5465,8 @@ snapshots:
   mustache@4.2.0: {}
 
   nanoid@3.3.12: {}
+
+  nanoid@5.1.11: {}
 
   natural-compare@1.4.0: {}
 
