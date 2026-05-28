@@ -17,3 +17,6 @@ build/
 
 # pnpm lockfile
 pnpm-lock.yaml
+
+# Drizzle Kit 自动生成产物（SQL + meta JSON），由 drizzle-kit 自己排版
+packages/db/drizzle/

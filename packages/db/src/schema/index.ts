@@ -1,3 +1,15 @@
-// Phase 1 起按 docs/后台管理系统接口设计方案.md §二 实体清单铺设 Drizzle schema。
-// 现阶段保留空导出，让其它包可以 `import { schema } from "@chiyan/db"`。
-export {};
+/**
+ * Drizzle schema 聚合 + enum 字面量数组导出。
+ *
+ * 字面量数组是 packages/types 漂移校验的 source of truth：
+ * types 包 import 数组 + z.enum(...) 构造 zod，CI 的 enums.test.ts deep-equal 锁住。
+ */
+export * from "./admins";
+export * from "./audit";
+export * from "./enums";
+export * from "./idempotency";
+export * from "./media";
+export * from "./models";
+export * from "./public-visits";
+export * from "./rosters";
+export * from "./schedule";
