@@ -30,13 +30,21 @@ import {
 } from "../../lib/totp-setup-store";
 import { authRequired } from "../../middleware/auth-required";
 import { csrf } from "../../middleware/csrf";
+import { keyFromAdmin, rateLimit } from "../../middleware/rate-limit";
 
 const ISSUER = "ChiYan Studio";
 
 const app = new Hono<AppContext>();
 
+// 整组限流：10/h/admin_id（setup + verify 共享桶，防爆破）。
+app.use(
+  "*",
+  authRequired,
+  rateLimit({ bucket: "sensitive_admin", windowMs: 60 * 60 * 1000, max: 10, key: keyFromAdmin }),
+);
+
 // ─── POST /totp/setup ─────────────────────────────────────────────
-app.post("/setup", authRequired, csrf, async (c) => {
+app.post("/setup", csrf, async (c) => {
   const admin = c.get("admin")!;
   const record = await findById(admin.admin_id);
   if (!record) return fail(c, 40101, "未授权");

@@ -20,6 +20,7 @@ import { _resetKeyRingCacheForTests } from "../../lib/keyring";
 import { hashPassword } from "../../lib/password";
 import { generateCode } from "../../lib/totp";
 import { _resetTotpSetupStoreForTests } from "../../lib/totp-setup-store";
+import { _resetRateLimitForTests } from "../../middleware/rate-limit";
 
 // 32 字节随机 key（base64）作为 ENC_KEY_V1；ALLOWED_ORIGINS 允许测试 origin
 const ENV = {
@@ -88,6 +89,7 @@ beforeEach(() => {
   _resetAuditForTests();
   _resetTotpSetupStoreForTests();
   _resetKeyRingCacheForTests();
+  _resetRateLimitForTests();
 });
 
 describe("Phase 1 — Owner 完整 onboarding 闭环", () => {

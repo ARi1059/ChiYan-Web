@@ -9,14 +9,14 @@ import type { AppContext } from "../../env";
 import { fail, ok } from "../../lib/api";
 import { writeAudit } from "../../lib/audit";
 import { findById, unlockAccount } from "../../lib/admin-repo";
-import { authRequired } from "../../middleware/auth-required";
 import { csrf } from "../../middleware/csrf";
 import { fullyOnboarded } from "../../middleware/fully-onboarded";
 import { roleRequired } from "../../middleware/role-required";
 
 const app = new Hono<AppContext>();
 
-app.use("*", authRequired, fullyOnboarded, csrf, roleRequired("owner"));
+// authRequired + rateLimit 已在父路由 /api/v1/admin 挂载。
+app.use("*", fullyOnboarded, csrf, roleRequired("owner"));
 
 app.post("/:id/unlock", async (c) => {
   const idParam = c.req.param("id");

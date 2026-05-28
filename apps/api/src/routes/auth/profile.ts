@@ -24,6 +24,7 @@ import { verifyJwt } from "../../lib/jwt";
 import { hashPassword, verifyPassword } from "../../lib/password";
 import { authRequired } from "../../middleware/auth-required";
 import { csrf } from "../../middleware/csrf";
+import { keyFromAdmin, rateLimit } from "../../middleware/rate-limit";
 
 const PASSWORD_HISTORY_LIMIT = 5;
 
@@ -46,9 +47,11 @@ app.get("/me", authRequired, async (c) => {
 });
 
 // ─── POST /change-password ────────────────────────────────────────
+// 限流：10/h/admin_id（接口方案 §7.1）。authRequired 后挂，确保有 admin_id。
 app.post(
   "/change-password",
   authRequired,
+  rateLimit({ bucket: "sensitive_admin", windowMs: 60 * 60 * 1000, max: 10, key: keyFromAdmin }),
   csrf,
   zValidator("json", authTypes.ChangePasswordRequest),
   async (c) => {

@@ -52,6 +52,12 @@ import { authRequired } from "../../middleware/auth-required";
 import { challengeRequired } from "../../middleware/challenge-required";
 import { refreshCookieName } from "../../lib/cookie";
 import { csrf } from "../../middleware/csrf";
+import {
+  consumeBucket,
+  keyFromIp,
+  rateLimit,
+  rateLimitedResponse,
+} from "../../middleware/rate-limit";
 
 const MAX_FAILED = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
@@ -59,10 +65,22 @@ const LOCK_DURATION_MS = 15 * 60 * 1000;
 const app = new Hono<AppContext>();
 
 // ─── POST /login ──────────────────────────────────────────────────
-app.post("/login", zValidator("json", authTypes.LoginRequest), async (c) => {
+// IP 限流（中间件）：20/min。Username 限流在 handler 内（10/h），需要 body.username。
+app.post(
+  "/login",
+  rateLimit({ bucket: "login_ip", windowMs: 60_000, max: 20, key: keyFromIp }),
+  zValidator("json", authTypes.LoginRequest),
+  async (c) => {
   const { username, password } = c.req.valid("json");
   const ip = c.req.header("CF-Connecting-IP") ?? null;
   const ua = c.req.header("User-Agent") ?? null;
+
+  // username 限流（10/h）— 放在 findByUsername 前，避免被用户枚举绕过。
+  const userLimit = consumeBucket(
+    { bucket: "login_username", windowMs: 60 * 60 * 1000, max: 10 },
+    username,
+  );
+  if (userLimit.blocked) return rateLimitedResponse(c, userLimit.retryAfterSec);
 
   const admin = await findByUsername(username);
   // 防用户枚举：不存在与密码错返回同样 40101
@@ -136,11 +154,18 @@ app.post("/login", zValidator("json", authTypes.LoginRequest), async (c) => {
   });
 
   return ok(c, { challenge_token } satisfies authTypes.LoginResponse);
-});
+  },
+);
 
 // ─── POST /login/totp ─────────────────────────────────────────────
+// IP 限流：10/5min（plan §7.1 line 446）。challenge_jti 在 body 里，限流前不验，所以用 IP。
 // 注意：zValidator 解析 body 后会 cache，challengeRequired 复用没问题。
-app.post("/login/totp", zValidator("json", authTypes.LoginTotpRequest), challengeRequired, async (c) => {
+app.post(
+  "/login/totp",
+  rateLimit({ bucket: "login_totp_ip", windowMs: 5 * 60 * 1000, max: 10, key: keyFromIp }),
+  zValidator("json", authTypes.LoginTotpRequest),
+  challengeRequired,
+  async (c) => {
   const { code } = c.req.valid("json");
   const adminId = c.get("challenge_admin_id")!;
   const ip = c.req.header("CF-Connecting-IP") ?? null;
@@ -191,10 +216,15 @@ app.post("/login/totp", zValidator("json", authTypes.LoginTotpRequest), challeng
     must_change_password: admin.must_change_password,
     totp_enrolled: admin.totp_enrolled,
   } satisfies authTypes.LoginTotpResponse);
-});
+  },
+);
 
 // ─── POST /refresh ────────────────────────────────────────────────
-app.post("/refresh", async (c) => {
+// IP 限流：60/min。refresh 是高频但来自合法浏览器自动重试，限制 IP 抗滥用。
+app.post(
+  "/refresh",
+  rateLimit({ bucket: "refresh_ip", windowMs: 60_000, max: 60, key: keyFromIp }),
+  async (c) => {
   const cookieName = refreshCookieName(c.env);
   const token = getCookie(c, cookieName);
   if (!token) return fail(c, 40101, "未授权");
@@ -226,7 +256,8 @@ app.post("/refresh", async (c) => {
   });
 
   return ok(c, { access_token } satisfies authTypes.RefreshResponse);
-});
+  },
+);
 
 // ─── POST /logout ─────────────────────────────────────────────────
 app.post("/logout", authRequired, csrf, async (c) => {
