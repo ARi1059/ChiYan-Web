@@ -13,3 +13,4 @@ export * from "./models";
 export * from "./public-visits";
 export * from "./rosters";
 export * from "./schedule";
+export * from "./studio-settings";

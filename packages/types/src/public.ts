@@ -58,7 +58,15 @@ export const PublicModelDetail = PublicModelCard.extend({
       cover: ImageAsset.optional(),
     }),
   ),
-  cooperation_history: z.array(z.string()),
+  // 与 DB schema 对齐（jsonb<Record<string, unknown>[]>），
+  // H5 §四（五）.2 需 brand/project/year 分别呈现
+  cooperation_history: z.array(
+    z.object({
+      brand: z.string(),
+      project: z.string().optional(),
+      year: z.number().int().optional(),
+    }),
+  ),
 });
 export type PublicModelDetail = z.infer<typeof PublicModelDetail>;
 
