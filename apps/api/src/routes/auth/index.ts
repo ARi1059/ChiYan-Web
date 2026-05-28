@@ -1,17 +1,23 @@
 /**
  * /api/v1/auth/* 路由聚合。
  *
- * Phase 1 Step 5b 填充：session / profile / totp 三个子模块。
- * 此处先占位，让 index.ts 能挂载且 404 走 hono 标准链路。
+ * 子路由按职责拆：
+ *   session.ts  → /login, /login/totp, /refresh, /logout
+ *   profile.ts  → /me, /change-password
+ *   totp.ts     → /totp/setup, /totp/verify
+ *
+ * 限流挂载点在 apps/api/src/index.ts，避免子路由耦合限流配置（Step 6 接 Upstash）。
  */
 import { Hono } from "hono";
 import type { AppContext } from "../../env";
+import profile from "./profile";
+import session from "./session";
+import totp from "./totp";
 
 const auth = new Hono<AppContext>();
 
-// TODO: Phase 1 Step 5b
-// auth.route("/", session);
-// auth.route("/", profile);
-// auth.route("/totp", totp);
+auth.route("/", session);
+auth.route("/", profile);
+auth.route("/totp", totp);
 
 export default auth;
