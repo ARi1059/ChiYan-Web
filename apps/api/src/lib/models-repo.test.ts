@@ -3,10 +3,22 @@ import {
   _insertMediaForTests,
   _insertModelForTests,
   _resetModelsRepoForTests,
+  adminArchiveModel,
+  adminCreateMedia,
+  adminCreateModel,
+  adminFindMediaById,
+  adminFindModelByCode,
+  adminFindModelById,
+  adminListMedia,
+  adminListModels,
+  adminRestoreModel,
+  adminUpdateMedia,
+  adminUpdateModel,
   findActiveByCode,
   findActiveByIds,
   findCoverAndGalleryAssets,
   listActive,
+  ModelsRepoConflictError,
   type ModelRecord,
 } from "./models-repo";
 
@@ -211,5 +223,164 @@ describe("models-repo / reset", () => {
     await _insertModelForTests(makeModel({ code: "M-2026-0001" }));
     _resetModelsRepoForTests();
     expect(await findActiveByCode("M-2026-0001")).toBe("not_found");
+  });
+});
+
+// ─── 管理视角 ──────────────────────────────────────────────
+
+describe("models-repo / admin write paths", () => {
+  it("adminCreateModel 落 real_name_enc，公开 cloneModel 不带", async () => {
+    const enc = new Uint8Array([1, 2, 3, 4]);
+    const created = await adminCreateModel({
+      code: "M-2026-0501",
+      nickname: "Eve",
+      real_name_enc: enc,
+    });
+    expect(created.real_name_enc).toEqual(enc);
+    // 公开视角不该带 real_name_enc
+    const pub = await findActiveByCode("M-2026-0501");
+    expect(pub).not.toBe("not_found");
+    expect((pub as ModelRecord & { real_name_enc?: unknown }).real_name_enc).toBeUndefined();
+  });
+
+  it("adminCreateModel code 重复 → ModelsRepoConflictError", async () => {
+    await adminCreateModel({ code: "M-2026-0510", nickname: "F" });
+    await expect(
+      adminCreateModel({ code: "M-2026-0510", nickname: "F2" }),
+    ).rejects.toBeInstanceOf(ModelsRepoConflictError);
+  });
+
+  it("adminFindModelById 含 archived（与公开三态不同）", async () => {
+    const m = await adminCreateModel({ code: "M-2026-0520", nickname: "G" });
+    await adminArchiveModel(m.id);
+    const found = await adminFindModelById(m.id);
+    expect(found).toBeDefined();
+    expect(found!.status).toBe("archived");
+    // 公开端则拒绝
+    expect(await findActiveByCode("M-2026-0520")).toBe("archived");
+  });
+
+  it("adminUpdateModel 部分字段 patch 不动其他字段", async () => {
+    const m = await adminCreateModel({
+      code: "M-2026-0530",
+      nickname: "H",
+      style_tags: ["御姐"],
+    });
+    const patched = await adminUpdateModel(m.id, { nickname: "Hello" });
+    expect(patched!.nickname).toBe("Hello");
+    expect(patched!.style_tags).toEqual(["御姐"]);
+    // mutate caller-returned 不污染 store
+    patched!.style_tags.push("校园");
+    const reread = await adminFindModelByCode("M-2026-0530");
+    expect(reread!.style_tags).toEqual(["御姐"]);
+  });
+
+  it("adminArchiveModel + adminRestoreModel 状态翻转", async () => {
+    const m = await adminCreateModel({ code: "M-2026-0540", nickname: "I" });
+    expect((await adminArchiveModel(m.id))!.status).toBe("archived");
+    expect((await adminRestoreModel(m.id))!.status).toBe("active");
+  });
+
+  it("adminListModels 按 status filter / 含 archived 选项", async () => {
+    await adminCreateModel({ code: "M-2026-0601", nickname: "A1" });
+    const x = await adminCreateModel({ code: "M-2026-0602", nickname: "A2" });
+    await adminArchiveModel(x.id);
+    const all = await adminListModels({ page: 1, page_size: 50 });
+    expect(all.total).toBe(2);
+    const archivedOnly = await adminListModels({ status: "archived", page: 1, page_size: 50 });
+    expect(archivedOnly.total).toBe(1);
+    expect(archivedOnly.items[0]!.code).toBe("M-2026-0602");
+  });
+
+  it("adminCreateMedia hash 冲突 → ModelsRepoConflictError", async () => {
+    await adminCreateMedia({
+      model_id: null,
+      type: "image",
+      url: "https://cdn/a.jpg",
+      original_url: "https://r2/a.jpg",
+      thumb_url: null,
+      width: 100,
+      height: 100,
+      file_size: 1000,
+      hash: "deadbeef",
+      has_watermark: false,
+      uploaded_by: 1,
+    });
+    await expect(
+      adminCreateMedia({
+        model_id: null,
+        type: "image",
+        url: "https://cdn/b.jpg",
+        original_url: "https://r2/b.jpg",
+        thumb_url: null,
+        width: 100,
+        height: 100,
+        file_size: 1000,
+        hash: "deadbeef",
+        has_watermark: false,
+        uploaded_by: 1,
+      }),
+    ).rejects.toBeInstanceOf(ModelsRepoConflictError);
+  });
+
+  it("adminUpdateMedia is_cover=true 同步 model.cover_asset_id", async () => {
+    const m = await adminCreateModel({ code: "M-2026-0701", nickname: "C" });
+    expect(m.cover_asset_id).toBeNull();
+    const media = await adminCreateMedia({
+      model_id: m.id,
+      type: "image",
+      url: "https://cdn/c.jpg",
+      original_url: "https://r2/c.jpg",
+      thumb_url: null,
+      width: 100,
+      height: 100,
+      file_size: 1000,
+      hash: "h-cover",
+      has_watermark: false,
+      uploaded_by: 1,
+    });
+    await adminUpdateMedia(media.id, { is_cover: true });
+    const re = await adminFindModelById(m.id);
+    expect(re!.cover_asset_id).toBe(media.id);
+    // 再 is_cover=false 取消
+    await adminUpdateMedia(media.id, { is_cover: false });
+    const re2 = await adminFindModelById(m.id);
+    expect(re2!.cover_asset_id).toBeNull();
+  });
+
+  it("adminListMedia model_id filter + type filter", async () => {
+    const m = await adminCreateModel({ code: "M-2026-0801", nickname: "L" });
+    await adminCreateMedia({
+      model_id: m.id, type: "image", url: "u1", original_url: "o1",
+      thumb_url: null, width: 1, height: 1, file_size: 1, hash: "h1",
+      has_watermark: false, uploaded_by: 1,
+    });
+    await adminCreateMedia({
+      model_id: m.id, type: "video", url: "u2", original_url: "o2",
+      thumb_url: null, width: 1, height: 1, file_size: 1, hash: "h2",
+      has_watermark: false, uploaded_by: 1,
+    });
+    await adminCreateMedia({
+      model_id: null, type: "image", url: "u3", original_url: "o3",
+      thumb_url: null, width: 1, height: 1, file_size: 1, hash: "h3",
+      has_watermark: false, uploaded_by: 1,
+    });
+    const byModel = await adminListMedia({ model_id: m.id, page: 1, page_size: 10 });
+    expect(byModel.total).toBe(2);
+    const byType = await adminListMedia({ type: "video", page: 1, page_size: 10 });
+    expect(byType.total).toBe(1);
+    expect(byType.items[0]!.url).toBe("u2");
+  });
+
+  it("adminFindMediaById 含 original_url + uploaded_by 全字段", async () => {
+    const created = await adminCreateMedia({
+      model_id: null, type: "image", url: "u", original_url: "ORIG",
+      thumb_url: null, width: 1, height: 1, file_size: 999, hash: "x",
+      has_watermark: false, uploaded_by: 42,
+    });
+    const got = await adminFindMediaById(created.id);
+    expect(got!.original_url).toBe("ORIG");
+    expect(got!.uploaded_by).toBe(42);
+    expect(got!.file_size).toBe(999);
   });
 });

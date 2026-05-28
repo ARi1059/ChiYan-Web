@@ -145,3 +145,103 @@ export function _resetAdminRepoForTests(): void {
   nextAdminId = 1;
   nextHistoryId = 1;
 }
+
+// ─── 账号管理（§4.7 Owner-only） ──────────────────────────────────────────────
+
+export interface ListAccountsOpts {
+  page: number;
+  page_size: number;
+}
+
+export async function listAccounts(
+  opts: ListAccountsOpts,
+): Promise<{ items: AdminRecord[]; total: number }> {
+  const all = Array.from(adminsById.values()).sort((a, b) => a.id - b.id);
+  const total = all.length;
+  const start = (opts.page - 1) * opts.page_size;
+  const items = all.slice(start, start + opts.page_size).map(clone);
+  return { items, total };
+}
+
+export class AdminRepoConflictError extends Error {
+  constructor(field: string) {
+    super(`conflict on ${field}`);
+    this.name = "AdminRepoConflictError";
+  }
+}
+
+export interface CreateAdminInput {
+  username: string;
+  display_name: string;
+  role: AdminRole;
+  password_hash: string;
+}
+
+/** 新建账号；username 冲突 throw AdminRepoConflictError。 */
+export async function createAdmin(input: CreateAdminInput): Promise<AdminRecord> {
+  if (adminsByUsername.has(input.username)) {
+    throw new AdminRepoConflictError("username");
+  }
+  const id = nextAdminId++;
+  const now = new Date();
+  const full: AdminRecord = {
+    id,
+    username: input.username,
+    display_name: input.display_name,
+    role: input.role,
+    status: "active",
+    password_hash: input.password_hash,
+    totp_secret_enc: null,
+    totp_enrolled: false,
+    must_change_password: true,
+    failed_login_count: 0,
+    locked_until: null,
+    last_login_at: null,
+    created_at: now,
+    updated_at: now,
+  };
+  adminsById.set(id, full);
+  adminsByUsername.set(full.username, id);
+  return clone(full);
+}
+
+export interface UpdateAdminProfilePatch {
+  display_name?: string;
+  role?: AdminRole;
+  status?: AdminStatus;
+}
+
+export async function updateAdminProfile(
+  id: number,
+  patch: UpdateAdminProfilePatch,
+): Promise<AdminRecord | undefined> {
+  const r = adminsById.get(id);
+  if (!r) return undefined;
+  if (patch.display_name !== undefined) r.display_name = patch.display_name;
+  if (patch.role !== undefined) r.role = patch.role;
+  if (patch.status !== undefined) r.status = patch.status;
+  r.updated_at = new Date();
+  return clone(r);
+}
+
+export async function disableAdmin(id: number): Promise<AdminRecord | undefined> {
+  return updateAdminProfile(id, { status: "disabled" });
+}
+
+/** 重置 2FA：清空 totp_secret_enc + totp_enrolled=false（密码状态不动）。 */
+export async function clearTotp(id: number): Promise<void> {
+  const r = adminsById.get(id);
+  if (!r) throw new Error(`admin ${id} not found`);
+  r.totp_secret_enc = null;
+  r.totp_enrolled = false;
+  r.updated_at = new Date();
+}
+
+/** 重置密码：替换 password_hash 且置 must_change_password=true。 */
+export async function setMustChangePassword(id: number, passwordHash: string): Promise<void> {
+  const r = adminsById.get(id);
+  if (!r) throw new Error(`admin ${id} not found`);
+  r.password_hash = passwordHash;
+  r.must_change_password = true;
+  r.updated_at = new Date();
+}

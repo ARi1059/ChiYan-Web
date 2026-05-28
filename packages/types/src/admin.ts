@@ -39,6 +39,12 @@ const PortfolioItem = z.object({
   cover_asset_id: z.number().int().optional(),
 });
 
+const CooperationItem = z.object({
+  brand: z.string(),
+  project: z.string().optional(),
+  year: z.number().int().optional(),
+});
+
 export const AdminModelDetail = z.object({
   id: z.number().int(),
   code: ModelCode,
@@ -60,7 +66,7 @@ export const AdminModelDetail = z.object({
   cover_asset_id: z.number().int().optional(),
   gallery_asset_ids: z.array(z.number().int()),
   portfolio: z.array(PortfolioItem),
-  cooperation_history: z.array(z.string()),
+  cooperation_history: z.array(CooperationItem),
   status: z.enum(modelStatusValues),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
@@ -94,6 +100,27 @@ export const AdminBatchImportRequest = z.object({
   rows: z.array(AdminCreateModelRequest).min(1).max(200),
 });
 export type AdminBatchImportRequest = z.infer<typeof AdminBatchImportRequest>;
+
+export const AdminBatchImportResponse = z.object({
+  ok_count: z.number().int(),
+  error_count: z.number().int(),
+  errors: z.array(
+    z.object({
+      row_index: z.number().int(),
+      code: z.number().int(),
+      message: z.string(),
+    }),
+  ),
+});
+export type AdminBatchImportResponse = z.infer<typeof AdminBatchImportResponse>;
+
+export const AdminModelsListResponse = z.object({
+  items: z.array(AdminModelDetail),
+  total: z.number().int(),
+  page: z.number().int(),
+  page_size: z.number().int(),
+});
+export type AdminModelsListResponse = z.infer<typeof AdminModelsListResponse>;
 
 // ═══════════════════════════════════════════════════════════════
 // §4.4 当日名单
@@ -172,6 +199,31 @@ export const AdminMediaPatchRequest = z.object({
 });
 export type AdminMediaPatchRequest = z.infer<typeof AdminMediaPatchRequest>;
 
+export const AdminMediaSummary = z.object({
+  id: z.number().int(),
+  model_id: z.number().int().nullable(),
+  type: z.enum(mediaTypeValues),
+  url: z.string(),
+  original_url: z.string(),
+  thumb_url: z.string().nullable(),
+  width: z.number().int().nullable(),
+  height: z.number().int().nullable(),
+  file_size: z.number().int(),
+  hash: z.string(),
+  has_watermark: z.boolean(),
+  uploaded_by: z.number().int(),
+  uploaded_at: z.string().datetime(),
+});
+export type AdminMediaSummary = z.infer<typeof AdminMediaSummary>;
+
+export const AdminMediaListResponse = z.object({
+  items: z.array(AdminMediaSummary),
+  total: z.number().int(),
+  page: z.number().int(),
+  page_size: z.number().int(),
+});
+export type AdminMediaListResponse = z.infer<typeof AdminMediaListResponse>;
+
 // ═══════════════════════════════════════════════════════════════
 // §4.6 档期
 // ═══════════════════════════════════════════════════════════════
@@ -245,6 +297,20 @@ export const AdminResetPasswordResponse = z.object({
 });
 export type AdminResetPasswordResponse = z.infer<typeof AdminResetPasswordResponse>;
 
+export const AdminAccountsListQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  page_size: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type AdminAccountsListQuery = z.infer<typeof AdminAccountsListQuery>;
+
+export const AdminAccountsListResponse = z.object({
+  items: z.array(AdminAccountSummary),
+  total: z.number().int(),
+  page: z.number().int(),
+  page_size: z.number().int(),
+});
+export type AdminAccountsListResponse = z.infer<typeof AdminAccountsListResponse>;
+
 // ═══════════════════════════════════════════════════════════════
 // §4.8 审计日志
 // ═══════════════════════════════════════════════════════════════
@@ -273,3 +339,11 @@ export const AdminAuditLog = z.object({
   created_at: z.string().datetime(),
 });
 export type AdminAuditLog = z.infer<typeof AdminAuditLog>;
+
+export const AdminAuditLogsListResponse = z.object({
+  items: z.array(AdminAuditLog),
+  total: z.number().int(),
+  page: z.number().int(),
+  page_size: z.number().int(),
+});
+export type AdminAuditLogsListResponse = z.infer<typeof AdminAuditLogsListResponse>;

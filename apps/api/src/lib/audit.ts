@@ -57,3 +57,49 @@ export function _resetAuditForTests(): void {
   ring.length = 0;
   nextId = 1;
 }
+
+// ─── 读路径（§4.8 GET /admin/audit-logs） ──────────────────────────────────────────────
+
+export interface FindAuditLogsOpts {
+  admin_id?: number;
+  action?: string;
+  target_type?: string;
+  from?: Date;
+  to?: Date;
+  page: number;
+  page_size: number;
+}
+
+export type AuditRow = AuditEntry & { id: number; created_at: Date };
+
+function cloneAuditRow(row: AuditRow): AuditRow {
+  return {
+    ...row,
+    payload: row.payload == null ? null : { ...row.payload },
+  };
+}
+
+export async function findAuditLogs(
+  opts: FindAuditLogsOpts,
+): Promise<{ items: AuditRow[]; total: number }> {
+  const filtered: AuditRow[] = [];
+  for (const r of ring) {
+    if (opts.admin_id !== undefined && r.admin_id !== opts.admin_id) continue;
+    if (opts.action !== undefined && r.action !== opts.action) continue;
+    if (opts.target_type !== undefined && r.target_type !== opts.target_type) continue;
+    if (opts.from && r.created_at < opts.from) continue;
+    if (opts.to && r.created_at > opts.to) continue;
+    filtered.push(r);
+  }
+  // 最新优先
+  filtered.sort((a, b) => b.id - a.id);
+  const total = filtered.length;
+  const start = (opts.page - 1) * opts.page_size;
+  const items = filtered.slice(start, start + opts.page_size).map(cloneAuditRow);
+  return { items, total };
+}
+
+export async function findAuditById(id: number): Promise<AuditRow | undefined> {
+  const r = ring.find((e) => e.id === id);
+  return r ? cloneAuditRow(r) : undefined;
+}
