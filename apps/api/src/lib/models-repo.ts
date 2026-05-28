@@ -194,16 +194,22 @@ export async function findCoverAndGalleryAssets(
 
 // ─── 测试种子 ──────────────────────────────────────────────
 
+/**
+ * 测试用 insert：按 code upsert（模拟真实 DB unique(code) 上的 ON CONFLICT DO UPDATE）。
+ * 多次同 code 调用不会在 store 里留多条 —— 便于"先种占位 → 再带 cover 重新种"的 helper 模式。
+ */
 export async function _insertModelForTests(
   record: Omit<ModelRecord, "id" | "created_at" | "updated_at"> &
     Partial<Pick<ModelRecord, "created_at" | "updated_at">>,
 ): Promise<ModelRecord> {
-  const id = nextModelId++;
+  const existingId = modelsByCode.get(record.code);
+  const id = existingId ?? nextModelId++;
+  const existing = existingId != null ? modelsById.get(existingId) : undefined;
   const now = new Date();
   const full: ModelRecord = {
     ...record,
     id,
-    created_at: record.created_at ?? now,
+    created_at: record.created_at ?? existing?.created_at ?? now,
     updated_at: record.updated_at ?? now,
   };
   modelsById.set(id, full);
