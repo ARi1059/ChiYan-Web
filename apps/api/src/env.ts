@@ -17,7 +17,7 @@
  * Variables 收口 middleware 在 c.set(...) 注入的 context 变量。
  */
 
-import type { Claims } from "./lib/jwt";
+import type { BaseClaims } from "./lib/jwt";
 
 export type Env = {
   ENV: "dev" | "staging" | "production";
@@ -34,7 +34,7 @@ export type Env = {
 export type Variables = {
   request_id: string;
   /** auth-required middleware 注入；未鉴权路由没有。 */
-  admin?: Claims & { admin_id: number };
+  admin?: BaseClaims & { admin_id: number };
   /** challenge-required middleware（/auth/login/totp 用）注入。 */
   challenge_admin_id?: number;
 };
