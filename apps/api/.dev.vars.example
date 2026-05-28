@@ -12,3 +12,7 @@
 # JWT_SECRET=>=32 字节随机字符串（建议 openssl rand -base64 48）
 # ENC_KEY_V1=base64 编码的 32 字节（openssl rand -base64 32）
 # ENC_KEY_V2=base64 编码的 32 字节（轮换准备，可暂留空）
+
+# ─── Cloudflare cache purge（Phase 3 admin 写路径触发；空则 cf-cache 自动 no-op） ───
+# CF_API_TOKEN=cloudflare api token（权限：Zone.Cache Purge）
+# CF_ZONE_ID=对应 zone 的 id

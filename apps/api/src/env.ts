@@ -29,6 +29,10 @@ export type Env = {
   JWT_SECRET: string;
   ENC_KEY_V1: string;
   ENC_KEY_V2?: string;
+
+  /** Cloudflare cache purge（Phase 3 admin 写路径触发；token 未到位时 cf-cache 自动 no-op）。 */
+  CF_API_TOKEN?: string;
+  CF_ZONE_ID?: string;
 };
 
 export type Variables = {
