@@ -10,7 +10,9 @@ import { authRequired } from "../../middleware/auth-required";
 import { keyFromAdmin, rateLimit } from "../../middleware/rate-limit";
 import accounts from "./accounts";
 import auditLogs from "./audit-logs";
+import media from "./media";
 import models from "./models";
+import roster from "./roster";
 
 const admin = new Hono<AppContext>();
 
@@ -22,11 +24,11 @@ admin.use(
 
 admin.route("/accounts", accounts);
 admin.route("/models", models);
+admin.route("/roster", roster);
+admin.route("/media", media);
 admin.route("/audit-logs", auditLogs);
 
 // TODO: Phase 3
-// admin.route("/roster", roster);
-// admin.route("/media", media);
 // admin.route("/schedule", schedule);
 
 export default admin;
