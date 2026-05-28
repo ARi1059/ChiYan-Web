@@ -1,0 +1,24 @@
+{
+  "name": "@chiyan/types",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@chiyan/config": "workspace:*",
+    "eslint": "^9.17.0",
+    "typescript": "~5.7.2"
+  }
+}

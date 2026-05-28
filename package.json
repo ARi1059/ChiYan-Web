@@ -1,0 +1,29 @@
+{
+  "name": "chiyan-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "ChiYan H5 + Admin Console + API — Cloudflare full-stack serverless",
+  "type": "module",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter \"./apps/*\" run dev",
+    "dev:h5": "pnpm --filter @chiyan/h5 run dev",
+    "dev:admin": "pnpm --filter @chiyan/admin run dev",
+    "dev:api": "pnpm --filter @chiyan/api run dev",
+    "build": "pnpm -r --filter \"./apps/*\" run build",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "pnpm -r run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml,css}\" --ignore-path .gitignore --ignore-path .prettierignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml,css}\" --ignore-path .gitignore --ignore-path .prettierignore",
+    "clean": "pnpm -r run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "prettier": "^3.4.0",
+    "typescript": "~5.7.2"
+  }
+}

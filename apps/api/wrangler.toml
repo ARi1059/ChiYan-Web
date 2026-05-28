@@ -1,0 +1,25 @@
+name = "chiyan-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Phase 0：只起 /health。Phase 1 起按 docs/开发计划.md §四 接入 Neon / Upstash / R2 / 秘钥。
+
+[observability]
+enabled = true
+
+# ---------- dev ----------
+# 本地通过 `pnpm dev:api` 起；环境变量从 .dev.vars 读取（gitignore 中）。
+
+# ---------- staging ----------
+[env.staging]
+name = "chiyan-api-staging"
+# routes = [{ pattern = "api-staging.example.com/*", custom_domain = true }]
+
+# ---------- production ----------
+[env.production]
+name = "chiyan-api"
+# routes = [{ pattern = "api.example.com/*", custom_domain = true }]
+
+# Phase 1 起补：
+# [[r2_buckets]] / [[kv_namespaces]] / [vars] / [secrets via wrangler secret put]

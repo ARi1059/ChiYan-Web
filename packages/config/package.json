@@ -1,0 +1,27 @@
+{
+  "name": "@chiyan/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./tsconfig.app.json": "./tsconfig.app.json",
+    "./tsconfig.worker.json": "./tsconfig.worker.json",
+    "./tsconfig.lib.json": "./tsconfig.lib.json",
+    "./eslint": "./eslint.config.js",
+    "./prettier": "./prettier.config.js"
+  },
+  "scripts": {
+    "typecheck": "echo 'config has no src'",
+    "lint": "echo 'config has no src'",
+    "clean": "rm -rf node_modules"
+  },
+  "dependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react": "^7.37.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^15.14.0",
+    "typescript-eslint": "^8.18.0"
+  }
+}

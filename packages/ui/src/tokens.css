@@ -1,0 +1,22 @@
+/*
+ * ChiYan Design Tokens — Phase 0 占位。
+ * Phase 2 起按 Figma Day 4 Tokens 评审结果替换。
+ * 同步策略见 docs/开发计划.md §六。
+ */
+:root {
+  --color-bg: #ffffff;
+  --color-fg: #0a0a0a;
+  --color-muted: #6b7280;
+  --color-accent: #d4af37;
+  --color-critical: #c1121f;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+}
+
+.dark {
+  --color-bg: #0a0a0a;
+  --color-fg: #fafafa;
+  --color-muted: #9ca3af;
+}

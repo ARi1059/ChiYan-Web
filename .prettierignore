@@ -1,0 +1,19 @@
+# 继承 .gitignore（package.json 里已经用 --ignore-path .gitignore），
+# 这里只补 prettier 不需要格式化、但 git 仍跟踪的目录。
+
+# Figma Make 导出参考代码：Phase 2 起逐组件迁移到 apps/h5/，
+# 迁移完成后整目录删除。详见 docs/开发计划.md §2.3。
+开始设计方案/
+
+# 中文设计 / 计划文档：人工撰写，prettier 对 CJK 换行处理易破坏排版，跳过。
+docs/
+README.md
+
+# 构建产物（双保险，.gitignore 已覆盖）
+dist/
+build/
+.wrangler/
+*.tsbuildinfo
+
+# pnpm lockfile
+pnpm-lock.yaml
