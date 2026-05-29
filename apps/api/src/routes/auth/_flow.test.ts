@@ -27,8 +27,9 @@ const ENV = {
   ENV: "dev" as const,
   ALLOWED_ORIGINS: '["http://localhost:5173"]',
   DATABASE_URL: "postgres://test",
-  UPSTASH_REDIS_REST_URL: "https://test.upstash",
-  UPSTASH_REDIS_REST_TOKEN: "test-token",
+  REDIS_URL: "redis://127.0.0.1:6379/0",
+  MEDIA_ROOT: "/tmp/chiyan-test-media",
+  API_PUBLIC_URL: "http://localhost:3000",
   JWT_SECRET: "test-jwt-secret-at-least-32-bytes-long-padding-padding",
   ENC_KEY_V1: btoa(String.fromCharCode(...new Uint8Array(32).fill(7))),
 };

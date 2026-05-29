@@ -1,39 +1,61 @@
 /**
- * Workers Bindings + Variables 类型。
+ * API 进程的环境变量模型与解析器。
  *
- * **secrets**（wrangler secret put 注入，不写在 wrangler.toml 里）：
- *   DATABASE_URL / UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN /
- *   JWT_SECRET / ENC_KEY_V1 / ENC_KEY_V2?
+ * 单一来源：apps/api/.env（dev）或 systemd EnvironmentFile=/etc/chiyan/secrets.env（prod）。
+ * 入口在 server.ts 调 loadEnv(process.env)，把校验过的对象作为 Hono Bindings 传进 app.fetch。
  *
- * **vars**（wrangler.toml [vars] 块；本地 .dev.vars 也读这些）：
- *   ENV / ALLOWED_ORIGINS
+ * 业务/中间件继续读 c.env.X（与 tests 第三参数 ENV 字面量保持同形），
+ * 不直接消费 process.env，便于 tests 注入定制 env。
  *
  * **格式约定**：
- *   - ALLOWED_ORIGINS：**JSON 数组字符串**，例 `'["https://chiyan.com","https://admin.chiyan.com"]'`
- *     dev 填 `'["http://localhost:5173","http://localhost:5174","http://localhost:8787"]'`
+ *   - ALLOWED_ORIGINS：JSON 数组字符串，例 '["https://chiyan.com","https://admin.chiyan.com"]'
+ *     dev 默认 '["http://localhost:5173","http://localhost:5174","http://localhost:3000"]'
  *   - ENC_KEY_V1/V2：base64 编码的 32 字节，crypto lib 解码后用
  *   - JWT_SECRET：至少 32 字节随机字符串
+ *   - REDIS_URL：redis://[:password@]host:port[/db]
+ *   - DATABASE_URL：postgresql://user:pass@host:port/db
+ *   - MEDIA_ROOT：绝对路径，dev 可指本仓库内 .media/ 目录
+ *   - API_PUBLIC_URL：媒体 sign 拼绝对 upload_url 用，例 https://api.chiyan.com
  *
  * Variables 收口 middleware 在 c.set(...) 注入的 context 变量。
  */
 
+import { z } from "zod";
 import type { BaseClaims } from "./lib/jwt";
 
-export type Env = {
-  ENV: "dev" | "staging" | "production";
-  ALLOWED_ORIGINS: string;
+const envSchema = z.object({
+  ENV: z.enum(["dev", "staging", "production"]).default("dev"),
+  ALLOWED_ORIGINS: z.string().default("[]"),
 
-  DATABASE_URL: string;
-  UPSTASH_REDIS_REST_URL: string;
-  UPSTASH_REDIS_REST_TOKEN: string;
-  JWT_SECRET: string;
-  ENC_KEY_V1: string;
-  ENC_KEY_V2?: string;
+  PORT: z.string().optional(),
 
-  /** Cloudflare cache purge（Phase 3 admin 写路径触发；token 未到位时 cf-cache 自动 no-op）。 */
-  CF_API_TOKEN?: string;
-  CF_ZONE_ID?: string;
-};
+  DATABASE_URL: z.string().min(1),
+  REDIS_URL: z.string().min(1),
+  MEDIA_ROOT: z.string().min(1),
+  API_PUBLIC_URL: z.string().url(),
+
+  JWT_SECRET: z.string().min(32, "JWT_SECRET 至少 32 字节"),
+  ENC_KEY_V1: z.string().min(1),
+  ENC_KEY_V2: z.string().optional(),
+
+  /** Cloudflare cache purge（DNS 走 proxied，写路径触发 purge_cache by Cache-Tag）。未配置时 cf-cache 自动 no-op。 */
+  CF_API_TOKEN: z.string().optional(),
+  CF_ZONE_ID: z.string().optional(),
+});
+
+export type Env = z.infer<typeof envSchema>;
+
+export function loadEnv(raw: NodeJS.ProcessEnv): Env {
+  const result = envSchema.safeParse(raw);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
+      .join("\n");
+    console.error(`[env] 配置校验失败:\n${issues}`);
+    process.exit(1);
+  }
+  return result.data;
+}
 
 export type Variables = {
   request_id: string;
