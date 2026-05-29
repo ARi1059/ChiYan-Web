@@ -1,23 +1,26 @@
 /**
- * R2 presigned PUT URL —— Phase 3 prep mock。
+ * 媒体直传 presigned URL（指向本机 API）。
  *
- * 真实接 R2 时这里换成 @aws-sdk/client-s3 + getSignedUrl（R2 兼容 S3 v4 签名），
- * handler 形态不动。
+ * 两步契约（与前端 unchanged）：
+ *   1. POST /admin/media/sign      → 返 upload_url + object_key + expires_at
+ *   2. 前端 PUT 文件到 upload_url（本机 /api/v1/admin/media/upload?key=...&sig=...&expires=...）
+ *   3. POST /admin/media/register  → 用 sign 返的 object_key 落 media_assets
  *
- * mock 行为：
- *  - 生成 object_key = `media/${YYYYMM}/${nanoid}.${ext}`
- *  - upload_url 占位 `https://r2-mock.local/upload/${object_key}?sig=mock`
- *  - 维护 in-memory signedKeys Map：key → expires_at（now + 15min）
- *  - register endpoint 调 _consumeSignedKey(key) 校验 key 是 sign 返回过且未过期，
- *    确保 mock 阶段也能模拟"必须先 sign 后 register"的契约
+ * **本 PR 范围**：实际 PUT endpoint（落盘 MEDIA_ROOT、sharp 处理、水印副本）尚未实现，
+ * 只把 sign 返回的 URL host 从 r2-mock.local 改为 env.API_PUBLIC_URL。in-memory signedKeys
+ * 仍由 _consumeSignedKey 消费（一次性 key，避免 sign 后 N 次 register 同 key）。
+ *
+ * object_key 命名：media/${YYYYMM}/${nanoid}.${ext}（与 docs §4 /var/chiyan/media/ 子目录对齐）。
  */
+
+import type { Env } from "../env";
 
 const SIGN_TTL_MS = 15 * 60 * 1000;
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
 
 const signedKeys = new Map<string, Date>();
 
-export interface R2SignResult {
+export interface MediaSignResult {
   upload_url: string;
   object_key: string;
   expires_at: Date;
@@ -43,17 +46,19 @@ function yyyyMm(d: Date): string {
   return `${y}${m}`;
 }
 
-export interface SignR2PutInput {
+export interface SignMediaUploadInput {
   type: "image" | "video";
   filename: string;
   content_type: string;
 }
 
-export async function signR2Put(input: SignR2PutInput): Promise<R2SignResult> {
+export async function signMediaUpload(env: Env, input: SignMediaUploadInput): Promise<MediaSignResult> {
   const now = new Date();
   const expires_at = new Date(now.getTime() + SIGN_TTL_MS);
   const object_key = `media/${yyyyMm(now)}/${nanoid(10)}.${extOf(input.filename)}`;
-  const upload_url = `https://r2-mock.local/upload/${object_key}?sig=mock&expires=${expires_at.getTime()}`;
+  // 占位 sig（本 PR 不真做 HMAC；真实上传 endpoint 落地时改成 keyring 派生的 HMAC over object_key+expires）
+  const base = env.API_PUBLIC_URL.replace(/\/+$/, "");
+  const upload_url = `${base}/api/v1/admin/media/upload?key=${encodeURIComponent(object_key)}&sig=mock&expires=${expires_at.getTime()}`;
   signedKeys.set(object_key, expires_at);
   return { upload_url, object_key, expires_at };
 }
@@ -73,6 +78,6 @@ export function _consumeSignedKey(object_key: string): boolean {
   return true;
 }
 
-export function _resetR2SignForTests(): void {
+export function _resetMediaSignForTests(): void {
   signedKeys.clear();
 }

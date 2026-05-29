@@ -31,7 +31,7 @@ import {
   ModelsRepoConflictError,
   type AdminMediaRecord,
 } from "../../lib/models-repo";
-import { _consumeSignedKey, signR2Put } from "../../lib/r2-sign";
+import { _consumeSignedKey, signMediaUpload } from "../../lib/media-sign";
 import { csrf } from "../../middleware/csrf";
 import { fullyOnboarded } from "../../middleware/fully-onboarded";
 import { roleRequired } from "../../middleware/role-required";
@@ -68,7 +68,7 @@ app.post(
   zValidator("json", adminTypes.AdminMediaSignRequest),
   async (c) => {
     const input = c.req.valid("json");
-    const r = await signR2Put({
+    const r = await signMediaUpload(c.env, {
       type: input.type,
       filename: input.filename,
       content_type: input.content_type,
