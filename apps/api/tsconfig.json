@@ -1,8 +1,8 @@
 {
-  "extends": "@chiyan/config/tsconfig.worker.json",
+  "extends": "@chiyan/config/tsconfig.node.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist"
+    "noEmit": true
   },
-  "include": ["src/**/*", "worker-configuration.d.ts"]
+  "include": ["src/**/*"]
 }
