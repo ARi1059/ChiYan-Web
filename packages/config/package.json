@@ -6,7 +6,7 @@
   "exports": {
     "./tsconfig.base.json": "./tsconfig.base.json",
     "./tsconfig.app.json": "./tsconfig.app.json",
-    "./tsconfig.worker.json": "./tsconfig.worker.json",
+    "./tsconfig.node.json": "./tsconfig.node.json",
     "./tsconfig.lib.json": "./tsconfig.lib.json",
     "./eslint": "./eslint.config.js",
     "./prettier": "./prettier.config.js"
