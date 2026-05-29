@@ -1,10 +1,12 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
 import * as schema from "./schema/index";
 
-export function getDb(databaseUrl: string) {
-  const sql = neon(databaseUrl);
-  return drizzle(sql, { schema });
+const { Pool } = pg;
+
+export function createDb(databaseUrl: string) {
+  const pool = new Pool({ connectionString: databaseUrl, max: 10 });
+  return drizzle(pool, { schema });
 }
 
-export type Db = ReturnType<typeof getDb>;
+export type Db = ReturnType<typeof createDb>;

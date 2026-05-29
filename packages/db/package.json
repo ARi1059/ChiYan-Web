@@ -15,11 +15,12 @@
     "clean": "rm -rf dist .drizzle"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^0.10.4",
-    "drizzle-orm": "^0.38.2"
+    "drizzle-orm": "^0.38.2",
+    "pg": "^8.13.1"
   },
   "devDependencies": {
     "@chiyan/config": "workspace:*",
+    "@types/pg": "^8.11.10",
     "drizzle-kit": "^0.30.1",
     "eslint": "^9.17.0",
     "typescript": "~5.7.2"
