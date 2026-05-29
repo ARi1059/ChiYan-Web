@@ -89,15 +89,14 @@ pnpm format
 
 **Phase R — 重定基（栈切换）**（见 [docs/开发计划.md §四](./docs/开发计划.md)）
 
-业主 2026-05-29 决定推翻 CF 全栈 Serverless 方案，改 VPS 自部署。已有 25 个 commit 的 mock 代码基于 Workers 写就，需要按新栈切换：
+业主 2026-05-29 决定推翻 CF 全栈 Serverless 方案，改 VPS 自部署。已有 25 个 commit 的 mock 代码基于 Workers 写就，已按新栈切换：
 
-- `apps/api` 入口换 `@hono/node-server`
-- `packages/db` 驱动切 `drizzle-orm/node-postgres`
-- Redis 切 `ioredis`
-- 密码哈希切 bcrypt native（cost 12）
-- 加密切 node:crypto AES-256-GCM
-- JWT 切 jose ES256
-- 媒体上传从 R2 presigned 两步合并为 multipart 单步（sharp 同步处理）
+- `apps/api` 入口换 `@hono/node-server`（Node 22）
+- `packages/db` 驱动切 `drizzle-orm/node-postgres` + `pg`
+- Redis 切 `node-redis` v4（本机 TCP，密码鉴权）
+- 媒体上传保留两步契约（sign → register），upload_url 改指向本机 API（落盘 `MEDIA_ROOT`，Phase 2 接 sharp）
+- 测试切 vanilla vitest（移除 `@cloudflare/vitest-pool-workers`）
+- build 切 tsup（bundle 内联 workspace 包，pg/redis 等 native 留 external）
 
 依赖业主决策（待跟进，见 [docs/开发计划.md §五](./docs/开发计划.md)）：
 

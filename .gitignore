@@ -17,13 +17,6 @@ out/
 # Vite
 *.local
 
-# Cloudflare Wrangler
-.wrangler/
-.dev.vars
-.dev.vars.*
-!.dev.vars.example
-wrangler.toml.local
-
 # TypeScript
 *.tsbuildinfo
 

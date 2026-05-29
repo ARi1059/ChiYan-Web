@@ -2,7 +2,7 @@
   "name": "chiyan-web",
   "version": "0.0.0",
   "private": true,
-  "description": "ChiYan H5 + Admin Console + API — Cloudflare full-stack serverless",
+  "description": "ChiYan H5 + Admin Console + API — VPS self-hosted (Node + Postgres + Redis + Caddy)",
   "type": "module",
   "engines": {
     "node": ">=20",

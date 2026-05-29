@@ -10,7 +10,7 @@
  *
  * 触发：429 + Retry-After（秒数）+ 错码 42901。
  *
- * Phase 1 backend：in-memory 滑动窗口。Step 7 切 Upstash zadd + zremrangebyscore + zcard
+ * Phase 1 backend：in-memory 滑动窗口。Step 7 切本地 Redis zadd + zremrangebyscore + zcard
  * 时换 `consumeBucket` 实现；中间件 / handler 接口形态不变。
  *
  * **mock 边界**：in-memory 在 Workers 多 isolate 之间不共享、cold start 后会丢，
