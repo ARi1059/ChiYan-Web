@@ -1,23 +1,29 @@
-import { Route, Routes } from "react-router-dom";
+/**
+ * H5 应用根。
+ *
+ * 嵌套顺序：
+ *   AuthProvider (mutation 需要 access_token)
+ *     → BrowserRouter (路由必须在 AppProvider 外，否则 useNavigate 在 fetch 取消时拿不到上下文)
+ *       → AppProvider (data + state)
+ *         → ToastProvider (QQ 接单 / 限流 / 错误提示)
+ *           → Layout (路由 + 状态屏 + sheet + admin)
+ */
+import { BrowserRouter } from "react-router-dom";
+import { AppProvider } from "./store/AppContext";
+import { AuthProvider } from "./store/AuthContext";
+import { ToastProvider } from "./components/ToastProvider";
+import { Layout } from "./Layout";
 
-export function App() {
+export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Placeholder title="ChiYan H5" />} />
-      <Route path="/today" element={<Placeholder title="当日通告" />} />
-      <Route path="/roster" element={<Placeholder title="模特名册" />} />
-      <Route path="/contact" element={<Placeholder title="联系我们" />} />
-      <Route path="/m/:code" element={<Placeholder title="模特详情" />} />
-      <Route path="*" element={<Placeholder title="未找到" />} />
-    </Routes>
-  );
-}
-
-function Placeholder({ title }: { title: string }) {
-  return (
-    <main className="page">
-      <h1>{title}</h1>
-      <p>Phase 0 占位页。Phase 2 起按设计稿落地。</p>
-    </main>
+    <AuthProvider>
+      <BrowserRouter>
+        <AppProvider>
+          <ToastProvider>
+            <Layout />
+          </ToastProvider>
+        </AppProvider>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
