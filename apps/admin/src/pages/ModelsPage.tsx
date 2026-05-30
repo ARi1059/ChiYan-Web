@@ -8,7 +8,8 @@
  *  - DELETE /admin/models/:id（归档）
  *  - 头像上传：ModelEditDrawer 内调 uploadMedia
  *
- * 封面缩略图：admin endpoint 不直接出 url，并行拉 /public/models?page_size=100 用 code 关联 cover.src；
+ * 封面缩略图：admin endpoint 不直接出 url，拉 /public/models 用 code 关联 cover.src；
+ * 公开端 page_size 上限 50，admin 列表最多 100 active —— 并行拉前两页凑齐。
  * 找不到则显示灰块。这与 H5 的 fetchAdminSnapshot 思路一致。
  */
 import { useCallback, useEffect, useState } from "react";
@@ -28,18 +29,24 @@ interface PublicCardLite {
 }
 
 async function fetchPublicCovers(): Promise<Map<string, string>> {
-  // 公开端不需鉴权；CSP / Cache-Control 走 vite proxy。失败时返回空 Map（封面列降级为灰块）。
+  // 公开端不需鉴权；page_size 上限 50（packages/types PublicModelsQuery），admin 列表最多
+  // 拉 100 active —— 并行拉前两页凑齐。任一页失败只跳过该页，返回已累积的 Map（封面列降级为灰块）。
+  const map = new Map<string, string>();
   try {
-    const res = await fetch("/api/v1/public/models?page=1&page_size=100");
-    if (!res.ok) return new Map();
-    const env = (await res.json()) as { code: number; data?: { items: PublicCardLite[] } };
-    if (env.code !== 0 || !env.data) return new Map();
-    const map = new Map<string, string>();
-    for (const c of env.data.items) map.set(c.code, c.cover.src);
-    return map;
+    const pages = await Promise.all([
+      fetch("/api/v1/public/models?page=1&page_size=50"),
+      fetch("/api/v1/public/models?page=2&page_size=50"),
+    ]);
+    for (const res of pages) {
+      if (!res.ok) continue;
+      const env = (await res.json()) as { code: number; data?: { items: PublicCardLite[] } };
+      if (env.code !== 0 || !env.data) continue;
+      for (const c of env.data.items) map.set(c.code, c.cover.src);
+    }
   } catch {
-    return new Map();
+    // 网络异常：返回已累积的 map（可能为空）
   }
+  return map;
 }
 
 export function ModelsPage() {
@@ -91,9 +98,7 @@ export function ModelsPage() {
       <div className="flex items-baseline justify-between mb-5">
         <div>
           <h2 className="text-xl font-semibold">模特管理</h2>
-          <p className="text-sm text-[var(--muted)] mt-0.5">
-            共 {rows.length} 位在册模特
-          </p>
+          <p className="text-sm text-[var(--muted)] mt-0.5">共 {rows.length} 位在册模特</p>
         </div>
         <div className="flex items-center gap-2">
           <button
