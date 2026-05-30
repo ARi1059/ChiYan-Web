@@ -17,10 +17,7 @@ import {
   _insertForTests as _insertAdminForTests,
   _resetAdminRepoForTests,
 } from "../../lib/admin-repo";
-import {
-  _getAuditEntriesForTests,
-  _resetAuditForTests,
-} from "../../lib/audit";
+import { _getAuditEntriesForTests, _resetAuditForTests } from "../../lib/audit";
 import { hashPassword } from "../../lib/password";
 import { signJwt } from "../../lib/jwt";
 import { _resetJtiStoreForTests } from "../../lib/jti-store";
@@ -66,10 +63,7 @@ async function tokenFor(adminId: number): Promise<string> {
   );
 }
 
-function makeRequest(
-  path: string,
-  init: RequestInit & { token?: string; csrf?: boolean } = {},
-) {
+function makeRequest(path: string, init: RequestInit & { token?: string; csrf?: boolean } = {}) {
   const headers = new Headers(init.headers);
   headers.set("CF-Connecting-IP", "203.0.113.42");
   headers.set("User-Agent", "vitest");
@@ -119,7 +113,10 @@ describe("POST /admin/models（创建）", () => {
       body: JSON.stringify(modelBody({ real_name: "张三" })),
     });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { code: number; data: { id: number; code: string; real_name?: string } };
+    const body = (await res.json()) as {
+      code: number;
+      data: { id: number; code: string; real_name?: string };
+    };
     expect(body.code).toBe(0);
     expect(body.data.code).toBe("M-2026-0501");
     expect(body.data.real_name).toBe("张三");
@@ -235,12 +232,18 @@ describe("PATCH / DELETE / restore", () => {
     const adminId = await seedAdmin("admin", "admin1");
     const token = await tokenFor(adminId);
     const created = await makeRequest("/api/v1/admin/models", {
-      method: "POST", token, csrf: true,
+      method: "POST",
+      token,
+      csrf: true,
       body: JSON.stringify(modelBody()),
     });
-    const { data: { id } } = (await created.json()) as { data: { id: number } };
+    const {
+      data: { id },
+    } = (await created.json()) as { data: { id: number } };
     const res = await makeRequest(`/api/v1/admin/models/${id}`, {
-      method: "PATCH", token, csrf: true,
+      method: "PATCH",
+      token,
+      csrf: true,
       body: JSON.stringify({ nickname: "EveX" }),
     });
     expect(res.status).toBe(200);
@@ -254,13 +257,19 @@ describe("PATCH / DELETE / restore", () => {
     const adminId = await seedAdmin("admin", "admin1");
     const token = await tokenFor(adminId);
     const created = await makeRequest("/api/v1/admin/models", {
-      method: "POST", token, csrf: true,
+      method: "POST",
+      token,
+      csrf: true,
       body: JSON.stringify(modelBody()),
     });
-    const { data: { id } } = (await created.json()) as { data: { id: number } };
+    const {
+      data: { id },
+    } = (await created.json()) as { data: { id: number } };
 
     const delRes = await makeRequest(`/api/v1/admin/models/${id}`, {
-      method: "DELETE", token, csrf: true,
+      method: "DELETE",
+      token,
+      csrf: true,
     });
     expect(delRes.status).toBe(200);
 
@@ -272,16 +281,17 @@ describe("PATCH / DELETE / restore", () => {
     expect(body1.data.items[0]!.status).toBe("archived");
 
     // 仅 active 过滤后空
-    const list2 = await makeRequest(
-      "/api/v1/admin/models?page=1&page_size=10&status=active",
-      { token },
-    );
+    const list2 = await makeRequest("/api/v1/admin/models?page=1&page_size=10&status=active", {
+      token,
+    });
     const body2 = (await list2.json()) as { data: { total: number } };
     expect(body2.data.total).toBe(0);
 
     // restore
     const restoreRes = await makeRequest(`/api/v1/admin/models/${id}/restore`, {
-      method: "POST", token, csrf: true,
+      method: "POST",
+      token,
+      csrf: true,
     });
     expect(restoreRes.status).toBe(200);
     const detail = await makeRequest(`/api/v1/admin/models/${id}`, { token });
@@ -296,14 +306,18 @@ describe("POST /admin/models/batch-import", () => {
     const token = await tokenFor(adminId);
     // 先种一条 M-2026-0001
     await makeRequest("/api/v1/admin/models", {
-      method: "POST", token, csrf: true,
+      method: "POST",
+      token,
+      csrf: true,
       body: JSON.stringify(modelBody({ code: "M-2026-0001" })),
     });
     const res = await makeRequest("/api/v1/admin/models/batch-import", {
-      method: "POST", token, csrf: true,
+      method: "POST",
+      token,
+      csrf: true,
       body: JSON.stringify({
         rows: [
-          modelBody({ code: "M-2026-0001" }),  // conflict
+          modelBody({ code: "M-2026-0001" }), // conflict
           modelBody({ code: "M-2026-0002" }),
           modelBody({ code: "M-2026-0003" }),
         ],
@@ -336,11 +350,15 @@ describe("GET /admin/audit-logs", () => {
     const adminId = await seedAdmin("admin", "admin1");
     const token = await tokenFor(adminId);
     await makeRequest("/api/v1/admin/models", {
-      method: "POST", token, csrf: true,
+      method: "POST",
+      token,
+      csrf: true,
       body: JSON.stringify(modelBody({ code: "M-2026-0001" })),
     });
     await makeRequest("/api/v1/admin/models", {
-      method: "POST", token, csrf: true,
+      method: "POST",
+      token,
+      csrf: true,
       body: JSON.stringify(modelBody({ code: "M-2026-0002" })),
     });
     const res = await makeRequest(
@@ -359,17 +377,21 @@ describe("GET /admin/audit-logs", () => {
     const adminId = await seedAdmin("admin", "admin1");
     const token = await tokenFor(adminId);
     await makeRequest("/api/v1/admin/models", {
-      method: "POST", token, csrf: true,
+      method: "POST",
+      token,
+      csrf: true,
       body: JSON.stringify(modelBody()),
     });
     const audits = await _getAuditEntriesForTests();
     const firstId = audits[0]!.id;
     const hit = await makeRequest(`/api/v1/admin/audit-logs/${firstId}`, {
-      token, csrf: true,
+      token,
+      csrf: true,
     });
     expect(hit.status).toBe(200);
     const miss = await makeRequest("/api/v1/admin/audit-logs/9999", {
-      token, csrf: true,
+      token,
+      csrf: true,
     });
     expect(miss.status).toBe(404);
   });
@@ -380,7 +402,9 @@ describe("不漏 real_name_enc 到 admin 响应 body", () => {
     const adminId = await seedAdmin("admin", "admin1");
     const token = await tokenFor(adminId);
     await makeRequest("/api/v1/admin/models", {
-      method: "POST", token, csrf: true,
+      method: "POST",
+      token,
+      csrf: true,
       body: JSON.stringify(modelBody({ real_name: "张三" })),
     });
     const list = await makeRequest("/api/v1/admin/models?page=1&page_size=10", { token });

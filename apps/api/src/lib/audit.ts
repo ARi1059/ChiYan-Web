@@ -5,7 +5,7 @@
  *
  * **极重要**：payload 落库前必须先 sanitize，否则明文密码 / TOTP secret / 一次性密码
  * 会随审计日志泄露。见 lib/sanitize.ts。每条写都额外结构化 stdout 打印一份给
- * journalctl / Sentry 用。
+ * journalctl 用。
  *
  * target_id：domain 模型用 string（admin code、media object_key 等），schema 用 bigint。
  * 数字串可转就转；非数字串落 null + 把原值塞进 payload.target_ref 以便检索。
@@ -84,7 +84,7 @@ export async function writeAudit(entry: AuditEntry): Promise<void> {
     userAgent: entry.ua,
   });
 
-  // 同时落一份 stdout（journalctl + Sentry breadcrumb 渗透用）
+  // 同时落一份 stdout（journalctl 用）
   // eslint-disable-next-line no-console
   console.log(
     JSON.stringify({

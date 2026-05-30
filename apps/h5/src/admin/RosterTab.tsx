@@ -17,11 +17,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useAuth } from "../store/AuthContext";
-import {
-  fetchAdminRoster,
-  putAdminRoster,
-  AdminApiError,
-} from "@chiyan/api-client";
+import { fetchAdminRoster, putAdminRoster, AdminApiError } from "@chiyan/api-client";
 import { cn } from "../components/ui/utils";
 
 function todayUtc(): string {
@@ -64,10 +60,7 @@ export function RosterTab() {
     };
   }, [date, session]);
 
-  const modelsWithApiId = useMemo(
-    () => models.filter((m) => m.apiId !== undefined),
-    [models],
-  );
+  const modelsWithApiId = useMemo(() => models.filter((m) => m.apiId !== undefined), [models]);
 
   const toggle = (apiId: number) => {
     setSelected((prev) => {
@@ -100,8 +93,7 @@ export function RosterTab() {
       }
       setDirty(false);
     } catch (err) {
-      const msg =
-        err instanceof AdminApiError ? `${err.message}（${err.code}）` : "保存失败";
+      const msg = err instanceof AdminApiError ? `${err.message}（${err.code}）` : "保存失败";
       setError(msg);
     } finally {
       setSaving(false);
@@ -110,9 +102,7 @@ export function RosterTab() {
 
   if (!session) {
     return (
-      <div className="p-5 text-sm text-muted-foreground">
-        请先登录管理员账号以管理今日名单。
-      </div>
+      <div className="p-5 text-sm text-muted-foreground">请先登录管理员账号以管理今日名单。</div>
     );
   }
 
@@ -123,13 +113,10 @@ export function RosterTab() {
           <p className="text-sm text-foreground">
             <span className="font-mono">{date}</span> 今日名单
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            勾选今日在班模特；未勾选即为空闲
-          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">勾选今日在班模特；未勾选即为空闲</p>
         </div>
         <p className="text-xs text-muted-foreground">
-          已选 <span className="text-foreground">{selected.size}</span> /{" "}
-          {modelsWithApiId.length}
+          已选 <span className="text-foreground">{selected.size}</span> / {modelsWithApiId.length}
         </p>
       </div>
 
@@ -142,9 +129,7 @@ export function RosterTab() {
       {loading && modelsWithApiId.length === 0 ? (
         <p className="text-sm text-muted-foreground">加载中…</p>
       ) : modelsWithApiId.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          还没有可用模特。请先到"模特"标签添加。
-        </p>
+        <p className="text-sm text-muted-foreground">还没有可用模特。请先到"模特"标签添加。</p>
       ) : (
         <div className="space-y-2">
           {modelsWithApiId.map((model) => {
@@ -173,9 +158,7 @@ export function RosterTab() {
                 <div
                   className={cn(
                     "w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0",
-                    isSel
-                      ? "bg-primary border-primary"
-                      : "bg-transparent border-border",
+                    isSel ? "bg-primary border-primary" : "bg-transparent border-border",
                   )}
                 >
                   {isSel && <Check className="w-3.5 h-3.5 text-primary-foreground" />}
@@ -196,11 +179,7 @@ export function RosterTab() {
             (!dirty || saving || loading) && "opacity-50 cursor-not-allowed active:scale-100",
           )}
         >
-          {saving
-            ? "保存中…"
-            : dirty
-              ? `保存 (${selected.size} 位在班)`
-              : "已是最新"}
+          {saving ? "保存中…" : dirty ? `保存 (${selected.size} 位在班)` : "已是最新"}
         </button>
       </div>
     </div>

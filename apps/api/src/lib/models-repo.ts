@@ -446,10 +446,8 @@ export async function adminListModels(
   const db = getDb();
   const conds = [];
   if (opts.status) conds.push(eq(models.status, opts.status));
-  if (opts.type)
-    conds.push(sql`${models.availableTypes} @> ${JSON.stringify([opts.type])}::jsonb`);
-  if (opts.style)
-    conds.push(sql`${models.styleTags} @> ${JSON.stringify([opts.style])}::jsonb`);
+  if (opts.type) conds.push(sql`${models.availableTypes} @> ${JSON.stringify([opts.type])}::jsonb`);
+  if (opts.style) conds.push(sql`${models.styleTags} @> ${JSON.stringify([opts.style])}::jsonb`);
   if (opts.q) conds.push(sql`${models.nickname} ILIKE ${"%" + opts.q.trim() + "%"}`);
   const where = conds.length === 0 ? undefined : conds.length === 1 ? conds[0] : and(...conds);
 
@@ -473,6 +471,57 @@ export async function adminFindModelById(id: number): Promise<AdminModelRecord |
   const db = getDb();
   const r = await db.query.models.findFirst({ where: eq(models.id, id) });
   return r ? toAdminModelDomain(r) : undefined;
+}
+
+/** 看板热度榜回填名称用：按 id 批量取 code/nickname/status（含 archived）。 */
+export async function adminFindModelsByIds(
+  ids: number[],
+): Promise<Array<{ id: number; code: string; nickname: string; status: ModelStatus }>> {
+  if (ids.length === 0) return [];
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: models.id,
+      code: models.code,
+      nickname: models.nickname,
+      status: models.status,
+    })
+    .from(models)
+    .where(inArray(models.id, ids));
+  return rows;
+}
+
+// ─── 看板统计（GET /admin/stats）──────────────────────────────────
+
+/** 按状态分组计数（active / archived）。 */
+export async function adminCountModelsByStatus(): Promise<{ active: number; archived: number }> {
+  const db = getDb();
+  const rows = await db
+    .select({ status: models.status, c: sql<number>`count(*)::int` })
+    .from(models)
+    .groupBy(models.status);
+  let active = 0;
+  let archived = 0;
+  for (const r of rows) {
+    if (r.status === "active") active = r.c;
+    else if (r.status === "archived") archived = r.c;
+  }
+  return { active, archived };
+}
+
+/** 待补资料 = active 且（无封面 OR 画廊为空）—— 业主该优先补图的模特数。 */
+export async function adminCountIncompleteModels(): Promise<number> {
+  const db = getDb();
+  const rows = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(models)
+    .where(
+      and(
+        eq(models.status, "active"),
+        sql`(${models.coverAssetId} is null or jsonb_array_length(${models.galleryAssetIds}) = 0)`,
+      ),
+    );
+  return rows[0]?.c ?? 0;
 }
 
 export async function adminFindModelByCode(code: string): Promise<AdminModelRecord | undefined> {
@@ -703,11 +752,7 @@ export async function adminUpdateMedia(
     if (patch.has_watermark !== undefined) set.hasWatermark = patch.has_watermark;
     let updated: MediaRow = cur;
     if (Object.keys(set).length > 0) {
-      const [r] = await tx
-        .update(mediaAssets)
-        .set(set)
-        .where(eq(mediaAssets.id, id))
-        .returning();
+      const [r] = await tx.update(mediaAssets).set(set).where(eq(mediaAssets.id, id)).returning();
       if (r) updated = r;
     }
     if (patch.is_cover !== undefined && cur.modelId != null) {

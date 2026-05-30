@@ -34,7 +34,12 @@ describe("rosters-repo", () => {
 
   it("二次 upsert 覆盖 model_ids + note", async () => {
     await _upsertRosterForTests({ date: "2026-05-29", model_ids: [1], created_by: 1 });
-    await _upsertRosterForTests({ date: "2026-05-29", model_ids: [2, 3], note: "替换", created_by: 1 });
+    await _upsertRosterForTests({
+      date: "2026-05-29",
+      model_ids: [2, 3],
+      note: "替换",
+      created_by: 1,
+    });
     const r = await findByDate("2026-05-29");
     expect(r!.model_ids).toEqual([2, 3]);
     expect(r!.note).toBe("替换");

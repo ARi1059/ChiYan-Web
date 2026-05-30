@@ -11,10 +11,12 @@
  *   zcard(key)                    ─ 当前计数
  *   expire(key, sec)              ─ 兜底 TTL
  *
- * 单例：server.ts 启动时创建一个共享 client，handler 通过参数注入或 lazy 持有。
- * **本 PR 范围内** stores 还是 in-memory Map，redis client 尚未实例化（Step 7 切上来）。
+ * 单例：server.ts 启动时 createRedis + setRedisClient；各 store 内部 getRedisClient()
+ * 拿共享 client。getRedisClient() 返回 null 时（未注入 / 连接失败），store 退回 in-memory
+ * Map —— 见 jti-store / challenge-store / totp-setup-store / rate-limit。
  *
- * 失败处理：所有原语透传 node-redis 抛出的错误；调用方决定降级策略。
+ * 失败处理：所有原语透传 node-redis 抛出的错误；调用方按 fail-open（限流/jti）或
+ * fail-closed（challenge/totp-setup）降级，并调 logRedisError 记录。
  */
 import { createClient, type RedisClientType } from "redis";
 
@@ -32,11 +34,26 @@ export async function createRedis(url: string): Promise<RedisClient> {
       }),
     );
   });
-  await client.connect();
+  try {
+    await client.connect();
+  } catch (err) {
+    // 连接失败：关掉后台 socket / 重连 timer，避免持续刷 error 日志，再上抛由调用方降级到内存
+    try {
+      await client.disconnect();
+    } catch {
+      /* already down */
+    }
+    throw err;
+  }
   return client;
 }
 
-export async function set(c: RedisClient, key: string, value: string, exSec?: number): Promise<void> {
+export async function set(
+  c: RedisClient,
+  key: string,
+  value: string,
+  exSec?: number,
+): Promise<void> {
   if (exSec && exSec > 0) {
     await c.set(key, value, { EX: exSec });
   } else {
@@ -48,7 +65,12 @@ export async function get(c: RedisClient, key: string): Promise<string | null> {
   return c.get(key);
 }
 
-export async function zadd(c: RedisClient, key: string, score: number, member: string): Promise<number> {
+export async function zadd(
+  c: RedisClient,
+  key: string,
+  score: number,
+  member: string,
+): Promise<number> {
   return c.zAdd(key, { score, value: member });
 }
 
@@ -67,4 +89,49 @@ export async function zcard(c: RedisClient, key: string): Promise<number> {
 
 export async function expire(c: RedisClient, key: string, sec: number): Promise<void> {
   await c.expire(key, sec);
+}
+
+/** key 删除（rare：手动失效）。 */
+export async function del(c: RedisClient, key: string): Promise<void> {
+  await c.del(key);
+}
+
+/** 原子读取并删除 —— challenge 一次性消费防重放（node-redis GETDEL，单命令原子）。 */
+export async function getDel(c: RedisClient, key: string): Promise<string | null> {
+  return c.getDel(key);
+}
+
+/** sorted set 按 score 升序取 [start,stop]（含 score）。限流取最旧戳算 retry-after。 */
+export async function zrangeWithScores(
+  c: RedisClient,
+  key: string,
+  start: number,
+  stop: number,
+): Promise<Array<{ value: string; score: number }>> {
+  return c.zRangeWithScores(key, start, stop);
+}
+
+// ─── 模块级单例 ───────────────────────────────────────────────
+// server.ts 启动时 setRedisClient(await createRedis(...))；store 内部 getRedisClient()。
+// 与 lib/db.ts 的 setDb/getDb 同构。getRedisClient() 为 null 时各 store 退回 in-memory Map。
+let sharedClient: RedisClient | null = null;
+
+export function setRedisClient(c: RedisClient | null): void {
+  sharedClient = c;
+}
+
+export function getRedisClient(): RedisClient | null {
+  return sharedClient;
+}
+
+/** store 在 fail-open / fail-closed 降级时统一记录（结构化，便于 journalctl 抓）。 */
+export function logRedisError(source: string, err: unknown): void {
+  console.error(
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      level: "error",
+      source: `redis:${source}`,
+      msg: err instanceof Error ? err.message : String(err),
+    }),
+  );
 }

@@ -1,12 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { _insertForTests as _insertAdminForTests, _resetAdminRepoForTests } from "./admin-repo";
 import { ensureSentinelAdmin } from "./sentinel-admin";
-import {
-  _resetAuditForTests,
-  findAuditById,
-  findAuditLogs,
-  writeAudit,
-} from "./audit";
+import { _resetAuditForTests, findAuditById, findAuditLogs, writeAudit } from "./audit";
 
 // 多 admin 测要先种实体（audit.admin_id 是 admins.id 的 FK），用 ADMIN_A / ADMIN_B 拿真 id 写入
 let ADMIN_A: number;

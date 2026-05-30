@@ -13,7 +13,7 @@
  * 找不到则显示灰块。这与 H5 的 fetchAdminSnapshot 思路一致。
  */
 import { useCallback, useEffect, useState } from "react";
-import { Trash2, RefreshCw, Plus, Pencil } from "lucide-react";
+import { Trash2, RefreshCw, Plus, Pencil, Upload } from "lucide-react";
 import { useAuth } from "../store/AuthContext";
 import {
   AdminApiError,
@@ -22,6 +22,7 @@ import {
   type AdminModelDetail,
 } from "@chiyan/api-client";
 import { ModelEditDrawer } from "../components/ModelEditDrawer";
+import { BatchImportModal } from "../components/BatchImportModal";
 
 interface PublicCardLite {
   code: string;
@@ -58,6 +59,7 @@ export function ModelsPage() {
   const [pendingDelete, setPendingDelete] = useState<number | null>(null);
   const [drawerMode, setDrawerMode] = useState<"new" | "edit" | null>(null);
   const [editingRow, setEditingRow] = useState<AdminModelDetail | null>(null);
+  const [batchOpen, setBatchOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!session) return;
@@ -110,6 +112,13 @@ export function ModelsPage() {
           >
             <Plus className="w-3.5 h-3.5" />
             新增模特
+          </button>
+          <button
+            onClick={() => setBatchOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--border)] text-sm hover:bg-[var(--card)]"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            批量导入
           </button>
           <button
             onClick={refresh}
@@ -244,6 +253,14 @@ export function ModelsPage() {
             setEditingRow(null);
             void refresh();
           }}
+        />
+      )}
+
+      {session && batchOpen && (
+        <BatchImportModal
+          accessToken={session.access_token}
+          onClose={() => setBatchOpen(false)}
+          onImported={() => void refresh()}
         />
       )}
     </div>

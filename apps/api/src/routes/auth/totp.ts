@@ -18,16 +18,8 @@ import { writeAudit } from "../../lib/audit";
 import { encrypt } from "../../lib/crypto";
 import { currentEncVersion, keyRingFromEnv } from "../../lib/keyring";
 import { enrollTotp, findById } from "../../lib/admin-repo";
-import {
-  buildOtpAuthUrl,
-  generateSecret,
-  verifyCode,
-} from "../../lib/totp";
-import {
-  clearSecret,
-  getSecret,
-  putSecret,
-} from "../../lib/totp-setup-store";
+import { buildOtpAuthUrl, generateSecret, verifyCode } from "../../lib/totp";
+import { clearSecret, getSecret, putSecret } from "../../lib/totp-setup-store";
 import { authRequired } from "../../middleware/auth-required";
 import { csrf } from "../../middleware/csrf";
 import { keyFromAdmin, rateLimit } from "../../middleware/rate-limit";
@@ -61,49 +53,55 @@ app.post("/setup", csrf, async (c) => {
 });
 
 // ─── POST /totp/verify ────────────────────────────────────────────
-app.post("/verify", authRequired, csrf, zValidator("json", authTypes.TotpVerifyRequest), async (c) => {
-  const admin = c.get("admin")!;
-  const { secret, code } = c.req.valid("json");
+app.post(
+  "/verify",
+  authRequired,
+  csrf,
+  zValidator("json", authTypes.TotpVerifyRequest),
+  async (c) => {
+    const admin = c.get("admin")!;
+    const { secret, code } = c.req.valid("json");
 
-  const stored = await getSecret(admin.admin_id);
-  if (!stored) {
-    return fail(c, 40001, "TOTP 绑定已过期，请重新发起", { sub_code: "totp_setup_expired" });
-  }
-  // 客户端传回的 secret 必须与服务端 store 一致；不一致直接拒绝（防中间被替换）
-  if (stored !== secret) {
-    return fail(c, 40001, "TOTP secret 不一致，请重新发起", { sub_code: "totp_setup_invalid" });
-  }
-  if (!verifyCode(stored, code)) {
+    const stored = await getSecret(admin.admin_id);
+    if (!stored) {
+      return fail(c, 40001, "TOTP 绑定已过期，请重新发起", { sub_code: "totp_setup_expired" });
+    }
+    // 客户端传回的 secret 必须与服务端 store 一致；不一致直接拒绝（防中间被替换）
+    if (stored !== secret) {
+      return fail(c, 40001, "TOTP secret 不一致，请重新发起", { sub_code: "totp_setup_invalid" });
+    }
+    if (!verifyCode(stored, code)) {
+      await writeAudit({
+        admin_id: admin.admin_id,
+        action: "auth.totp.setup_failed",
+        target_type: "admin",
+        target_id: String(admin.admin_id),
+        payload: null,
+        ip: c.req.header("CF-Connecting-IP") ?? null,
+        ua: c.req.header("User-Agent") ?? null,
+      });
+      return fail(c, 40001, "TOTP 校验失败", { sub_code: "totp_code_invalid" });
+    }
+
+    const ring = keyRingFromEnv(c.env);
+    const version = currentEncVersion(c.env);
+    const enc = await encrypt(stored, version, ring[version]!);
+
+    await enrollTotp(admin.admin_id, enc);
+    await clearSecret(admin.admin_id);
+
     await writeAudit({
       admin_id: admin.admin_id,
-      action: "auth.totp.setup_failed",
+      action: "auth.totp.enrolled",
       target_type: "admin",
       target_id: String(admin.admin_id),
-      payload: null,
+      payload: { key_version: version },
       ip: c.req.header("CF-Connecting-IP") ?? null,
       ua: c.req.header("User-Agent") ?? null,
     });
-    return fail(c, 40001, "TOTP 校验失败", { sub_code: "totp_code_invalid" });
-  }
 
-  const ring = keyRingFromEnv(c.env);
-  const version = currentEncVersion(c.env);
-  const enc = await encrypt(stored, version, ring[version]!);
-
-  await enrollTotp(admin.admin_id, enc);
-  await clearSecret(admin.admin_id);
-
-  await writeAudit({
-    admin_id: admin.admin_id,
-    action: "auth.totp.enrolled",
-    target_type: "admin",
-    target_id: String(admin.admin_id),
-    payload: { key_version: version },
-    ip: c.req.header("CF-Connecting-IP") ?? null,
-    ua: c.req.header("User-Agent") ?? null,
-  });
-
-  return ok(c, { enrolled: true });
-});
+    return ok(c, { enrolled: true });
+  },
+);
 
 export default app;

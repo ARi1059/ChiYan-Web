@@ -17,6 +17,7 @@ import { createDb } from "@chiyan/db";
 import app from "./index";
 import { loadEnv } from "./env";
 import { setDb } from "./lib/db";
+import { createRedis, setRedisClient } from "./lib/redis";
 import { ensureStudioSettingsSeed } from "./lib/studio-info-repo";
 
 const env = loadEnv(process.env);
@@ -24,6 +25,27 @@ const port = env.PORT ? Number(env.PORT) : 3000;
 
 const db = createDb(env.DATABASE_URL);
 setDb(db);
+
+// Redis：限流 / jti 黑名单 / challenge / totp-setup 四处共享后端。连不上不阻塞启动——
+// systemd Requires=redis-server 保证 prod 有 redis；dev 没起则降级 in-memory Map
+// （各 store 内部 getRedisClient()==null 时走内存路径，重启即丢，仅供本地）。
+try {
+  setRedisClient(await createRedis(env.REDIS_URL));
+  console.log(
+    JSON.stringify({ ts: new Date().toISOString(), level: "info", msg: "redis connected" }),
+  );
+} catch (err) {
+  console.error(
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      level: "error",
+      source: "redis",
+      msg: "redis connect failed — 降级 in-memory stores（rate-limit/jti/challenge/totp 重启即丢，prod 须排查）",
+      detail: err instanceof Error ? err.message : String(err),
+    }),
+  );
+}
+
 await ensureStudioSettingsSeed();
 
 serve(

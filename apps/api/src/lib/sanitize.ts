@@ -1,7 +1,7 @@
 /**
  * 敏感字段过滤。
  *
- * 给 logger / Sentry / 审计 payload 共用，保证：
+ * 给 logger / 审计 payload 共用，保证：
  * - 明文密码 / TOTP secret / 一次性密码 / 各种 token 等永远不离开内存进日志
  *
  * 规则：

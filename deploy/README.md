@@ -53,14 +53,23 @@ deploy/
    sudo systemctl reload caddy
    ```
 
-5. **首次部署应用产物**
+5. **首次部署应用产物**（结构必须与 `.github/workflows/deploy.yml` 一致：`*-next` 真目录 + 软链。
+   首次若直接建成真目录 `api`/`dist`，后续 CI 的 `ln -sfn` 会把软链建进目录内部 → 部署错乱）
    ```bash
-   # 在 GH Actions / 本机：pnpm install --frozen-lockfile && pnpm build
-   # rsync apps/api/dist + apps/api/package.json + apps/api/node_modules → VPS:/var/www/chiyan/apps/api
-   # rsync apps/h5/dist → VPS:/var/www/chiyan-h5/dist
-   # rsync apps/admin/dist → VPS:/var/www/chiyan-admin/dist
-   # 在 VPS 上跑 db migrate
-   pnpm --filter @chiyan/db migrate    # DATABASE_URL 从 secrets.env 读
+   # 本机 / GH Actions：pnpm install --frozen-lockfile && pnpm build
+   # 1) 推到 *-next 真目录
+   rsync -az --delete apps/api/dist/ apps/api/package.json apps/api/node_modules/ \
+     <deploy>@<host>:/var/www/chiyan/apps/api-next/
+   rsync -az --delete apps/h5/dist/    <deploy>@<host>:/var/www/chiyan-h5/dist-next/
+   rsync -az --delete apps/admin/dist/ <deploy>@<host>:/var/www/chiyan-admin/dist-next/
+   # 2) 原子软链（首次建立；之后 deploy.yml 用同样的 ln -sfn 替换）
+   ssh <deploy>@<host> '
+     ln -sfn /var/www/chiyan/apps/api-next   /var/www/chiyan/apps/api
+     ln -sfn /var/www/chiyan-h5/dist-next    /var/www/chiyan-h5/dist
+     ln -sfn /var/www/chiyan-admin/dist-next /var/www/chiyan-admin/dist'
+   # 3) 首次 db migrate：postgres 只听 VPS 127.0.0.1，本机经 SSH 隧道连上跑（详见 deploy/RUNBOOK.md）
+   ssh -fNL 5433:127.0.0.1:5432 <deploy>@<host>
+   DATABASE_URL='postgresql://chiyan:<pwd>@127.0.0.1:5433/chiyan_prod' pnpm --filter @chiyan/db migrate
    ```
 
 6. **装 systemd unit + 启动**
@@ -71,9 +80,8 @@ deploy/
    sudo journalctl -fu chiyan-api      # 看日志确认 listening on :3000
    ```
 
-7. **配每日备份**
+7. **配每日备份**（本地同盘 db dump；⚠ 只防误删 / 逻辑错误，**不防盘损 / VM 丢失**，业主 2026-05-31 已知悉）
    ```bash
-   # rclone config 配 b2 remote 一次
    sudo cp deploy/scripts/chiyan-backup.sh /usr/local/bin/
    sudo chmod 750 /usr/local/bin/chiyan-backup.sh
    sudo chown chiyan:chiyan /usr/local/bin/chiyan-backup.sh

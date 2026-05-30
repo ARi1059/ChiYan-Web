@@ -20,7 +20,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.1.1",
-    "tailwindcss": "^4.1.12"
+    "tailwindcss": "^4.1.12",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@chiyan/config": "workspace:*",

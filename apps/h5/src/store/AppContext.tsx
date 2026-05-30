@@ -150,9 +150,7 @@ function modelToPatch(updates: Partial<Model>): Partial<AdminCreateModelInput> {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
-  const [models, setModelsState] = useState<Model[]>(() =>
-    load(CACHE_KEYS.models, DEFAULT_MODELS),
-  );
+  const [models, setModelsState] = useState<Model[]>(() => load(CACHE_KEYS.models, DEFAULT_MODELS));
   const [settings, setSettings] = useState<SiteSettings>(() =>
     load(CACHE_KEYS.settings, DEFAULT_SETTINGS),
   );
@@ -279,11 +277,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateDisplay = (updates: Partial<DisplayConfig>) => {
     setDisplay((prev) => ({ ...prev, ...updates }));
     if (!session) return;
-    patchStudioSettings({ display_config: updates }, session.access_token).catch(
-      (e: unknown) => {
-        console.warn("[AppContext] updateDisplay PATCH failed:", e);
-      },
-    );
+    patchStudioSettings({ display_config: updates }, session.access_token).catch((e: unknown) => {
+      console.warn("[AppContext] updateDisplay PATCH failed:", e);
+    });
   };
 
   return (

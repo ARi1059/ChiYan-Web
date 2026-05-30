@@ -77,9 +77,7 @@ export function WechatHintSheet({ open, onClose }: Props) {
               {copied ? "已复制链接" : "复制链接"}
             </button>
 
-            <p className="text-[11px] text-muted-foreground text-center break-all">
-              {url}
-            </p>
+            <p className="text-[11px] text-muted-foreground text-center break-all">{url}</p>
           </div>
         </Drawer.Content>
       </Drawer.Portal>

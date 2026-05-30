@@ -7,10 +7,5 @@ interface Props {
 
 export function HomePage({ onBrandTap }: Props) {
   const { open } = useSelectedModel();
-  return (
-    <HomeSection
-      onSelectModel={(m) => open(m.code ?? m.id)}
-      onBrandTap={onBrandTap}
-    />
-  );
+  return <HomeSection onSelectModel={(m) => open(m.code ?? m.id)} onBrandTap={onBrandTap} />;
 }

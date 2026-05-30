@@ -9,10 +9,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import app from "../../index";
-import {
-  _insertForTests,
-  _resetAdminRepoForTests,
-} from "../../lib/admin-repo";
+import { _insertForTests, _resetAdminRepoForTests } from "../../lib/admin-repo";
 import { _resetAuditForTests } from "../../lib/audit";
 import { _resetChallengeStoreForTests } from "../../lib/challenge-store";
 import { _resetJtiStoreForTests } from "../../lib/jti-store";
@@ -103,7 +100,10 @@ describe("Phase 1 — Owner 完整 onboarding 闭环", () => {
       body: JSON.stringify({ username: "owner", password: ONE_TIME_PASSWORD }),
     });
     expect(loginRes.status).toBe(200);
-    const loginBody = (await loginRes.json()) as { code: number; data: { challenge_token: string } };
+    const loginBody = (await loginRes.json()) as {
+      code: number;
+      data: { challenge_token: string };
+    };
     expect(loginBody.code).toBe(0);
     expect(loginBody.data.challenge_token).toMatch(/^eyJ/);
 
@@ -130,7 +130,9 @@ describe("Phase 1 — Owner 完整 onboarding 闭环", () => {
       cookie: cookieHeader(jar),
     });
     expect(meRes1.status).toBe(200);
-    const me1 = (await meRes1.json()) as { data: { must_change_password: boolean; totp_enrolled: boolean } };
+    const me1 = (await meRes1.json()) as {
+      data: { must_change_password: boolean; totp_enrolled: boolean };
+    };
     expect(me1.data.must_change_password).toBe(true);
     expect(me1.data.totp_enrolled).toBe(false);
 
@@ -195,7 +197,9 @@ describe("Phase 1 — Owner 完整 onboarding 闭环", () => {
       cookie: cookieHeader(jar2),
     });
     expect(meRes2.status).toBe(200);
-    const me2 = (await meRes2.json()) as { data: { must_change_password: boolean; totp_enrolled: boolean } };
+    const me2 = (await meRes2.json()) as {
+      data: { must_change_password: boolean; totp_enrolled: boolean };
+    };
     expect(me2.data.must_change_password).toBe(false);
     expect(me2.data.totp_enrolled).toBe(true);
 
@@ -219,7 +223,10 @@ describe("Phase 1 — Owner 完整 onboarding 闭环", () => {
       body: JSON.stringify(bad),
     });
     expect(fifth.status).toBe(403);
-    const body = (await fifth.json()) as { code: number; data: { sub_code: string; locked_until: string } };
+    const body = (await fifth.json()) as {
+      code: number;
+      data: { sub_code: string; locked_until: string };
+    };
     expect(body.code).toBe(40301);
     expect(body.data.sub_code).toBe("locked");
     expect(new Date(body.data.locked_until).getTime()).toBeGreaterThan(Date.now());
@@ -323,7 +330,10 @@ describe("Phase 1 — Owner 完整 onboarding 闭环", () => {
       headers: { Authorization: `Bearer ${ltb.data.access_token}` },
       cookie: cookieHeader(jar),
       csrf: "wrong-csrf-token",
-      body: JSON.stringify({ old_password: ONE_TIME_PASSWORD, new_password: "Another-Valid-Pass-1!" }),
+      body: JSON.stringify({
+        old_password: ONE_TIME_PASSWORD,
+        new_password: "Another-Valid-Pass-1!",
+      }),
     });
     expect(bad.status).toBe(403);
     const body = (await bad.json()) as { data: { sub_code: string } };

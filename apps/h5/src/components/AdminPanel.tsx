@@ -69,7 +69,7 @@ function PinScreen({ onSuccess }: { onSuccess: () => void }) {
                 ? error
                   ? "bg-destructive border-destructive"
                   : "bg-primary border-primary"
-                : "bg-transparent border-border"
+                : "bg-transparent border-border",
             )}
           />
         ))}
@@ -100,9 +100,7 @@ function PinScreen({ onSuccess }: { onSuccess: () => void }) {
         </button>
       </div>
 
-      {error && (
-        <p className="text-sm text-destructive">密码错误，请重试</p>
-      )}
+      {error && <p className="text-sm text-destructive">密码错误，请重试</p>}
     </div>
   );
 }
@@ -151,9 +149,7 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
                   "flex-1 py-3 text-sm transition-colors duration-150 relative",
-                  activeTab === tab.id
-                    ? "text-primary"
-                    : "text-muted-foreground"
+                  activeTab === tab.id ? "text-primary" : "text-muted-foreground",
                 )}
               >
                 {tab.label}

@@ -6,12 +6,7 @@ import { useApp } from "../store/AppContext";
 import { useToast } from "./ToastProvider";
 import { WechatHintSheet } from "./WechatHintSheet";
 import { ShareSheet } from "./ShareSheet";
-import {
-  buildOrderMessage,
-  checkRateLimit,
-  copyAndContactQQ,
-  detectQQContext,
-} from "../lib/qq";
+import { buildOrderMessage, checkRateLimit, copyAndContactQQ, detectQQContext } from "../lib/qq";
 import { attemptShare, type ShareIntent } from "../lib/share";
 import type { Model } from "../data/models";
 
@@ -45,11 +40,12 @@ export function ModelDetailSheet({ model, onClose }: ModelDetailSheetProps) {
    */
   const handleShare = async () => {
     if (!model) return;
-    const url = typeof window === "undefined"
-      ? ""
-      : model.code
-        ? `${window.location.origin}/today?m=${encodeURIComponent(model.code)}`
-        : window.location.href;
+    const url =
+      typeof window === "undefined"
+        ? ""
+        : model.code
+          ? `${window.location.origin}/today?m=${encodeURIComponent(model.code)}`
+          : window.location.href;
     const intent: ShareIntent = {
       title: `${model.alias} · ${settings.agencyName}`,
       text: `${model.alias} 当日通告 · ${settings.agencyName}`,
@@ -107,11 +103,7 @@ export function ModelDetailSheet({ model, onClose }: ModelDetailSheetProps) {
 
   return (
     <>
-      <Drawer.Root
-        key={model.id}
-        open={!!model}
-        onOpenChange={(open) => !open && onClose()}
-      >
+      <Drawer.Root key={model.id} open={!!model} onOpenChange={(open) => !open && onClose()}>
         <Drawer.Portal>
           <Drawer.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-40" />
           <Drawer.Content
@@ -197,8 +189,8 @@ export function ModelDetailSheet({ model, onClose }: ModelDetailSheetProps) {
                       model.status === "在班"
                         ? "bg-emerald-50 text-emerald-700"
                         : model.status === "空闲"
-                        ? "bg-amber-50 text-amber-700"
-                        : "bg-gray-100 text-gray-400",
+                          ? "bg-amber-50 text-amber-700"
+                          : "bg-gray-100 text-gray-400",
                     )}
                   >
                     {model.status}
@@ -207,12 +199,17 @@ export function ModelDetailSheet({ model, onClose }: ModelDetailSheetProps) {
                     <span className="text-xs text-muted-foreground">成都 · {model.district}</span>
                   )}
                   {display.showQQNumber && (
-                    <span className="text-xs text-muted-foreground font-mono">{model.qqNumber}</span>
+                    <span className="text-xs text-muted-foreground font-mono">
+                      {model.qqNumber}
+                    </span>
                   )}
                   {display.showStyles && (
                     <div className="flex gap-1 flex-wrap">
                       {model.styles.map((s) => (
-                        <span key={s} className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
+                        <span
+                          key={s}
+                          className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground"
+                        >
                           {s}
                         </span>
                       ))}
@@ -222,10 +219,7 @@ export function ModelDetailSheet({ model, onClose }: ModelDetailSheetProps) {
 
                 {visibleStats.length > 0 && (
                   <div
-                    className={cn(
-                      "bg-secondary rounded-[12px] p-4 mb-4",
-                      `grid gap-3`,
-                    )}
+                    className={cn("bg-secondary rounded-[12px] p-4 mb-4", `grid gap-3`)}
                     style={{ gridTemplateColumns: `repeat(${visibleStats.length}, 1fr)` }}
                   >
                     {visibleStats.map((s) => (

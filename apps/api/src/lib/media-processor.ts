@@ -114,8 +114,14 @@ export async function processUpload(opts: ProcessOptions): Promise<ProcessResult
     if (!srcW || !srcH) throw new Error("missing metadata");
 
     // ── 主图：resize + 水印 + WebP ─────────────────────────────
-    const targetW = srcW > srcH ? Math.min(srcW, MAX_MAIN_DIMENSION) : Math.round((srcW * Math.min(srcH, MAX_MAIN_DIMENSION)) / srcH);
-    const targetH = srcH > srcW ? Math.min(srcH, MAX_MAIN_DIMENSION) : Math.round((srcH * Math.min(srcW, MAX_MAIN_DIMENSION)) / srcW);
+    const targetW =
+      srcW > srcH
+        ? Math.min(srcW, MAX_MAIN_DIMENSION)
+        : Math.round((srcW * Math.min(srcH, MAX_MAIN_DIMENSION)) / srcH);
+    const targetH =
+      srcH > srcW
+        ? Math.min(srcH, MAX_MAIN_DIMENSION)
+        : Math.round((srcH * Math.min(srcW, MAX_MAIN_DIMENSION)) / srcW);
 
     let mainPipeline = sharp(bytes, { failOn: "none" }).resize(targetW, targetH, {
       fit: "inside",

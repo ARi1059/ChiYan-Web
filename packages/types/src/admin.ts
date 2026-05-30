@@ -436,3 +436,37 @@ export const AdminAuditLogsListResponse = z.object({
   page_size: z.number().int(),
 });
 export type AdminAuditLogsListResponse = z.infer<typeof AdminAuditLogsListResponse>;
+
+// ═══════════════════════════════════════════════════════════════
+// §4.10 数据看板（Dashboard，owner + admin）
+// ═══════════════════════════════════════════════════════════════
+
+export const AdminStatsTopModel = z.object({
+  model_id: z.number().int(),
+  code: z.string().nullable(),
+  nickname: z.string(),
+  visits: z.number().int(),
+});
+export type AdminStatsTopModel = z.infer<typeof AdminStatsTopModel>;
+
+export const AdminStatsResponse = z.object({
+  /** UTC 当天 'YYYY-MM-DD'，与 public/today 口径一致 */
+  today: IsoDate,
+  /** 今日（UTC 当天 00:00 起）访问埋点 */
+  visits_today: z.object({
+    pv: z.number().int(),
+    uv: z.number().int(),
+  }),
+  /** 今日名单在班模特数 */
+  on_duty_today: z.number().int(),
+  models: z.object({
+    active: z.number().int(),
+    archived: z.number().int(),
+    /** active 且缺封面或画廊为空 —— 待补资料 */
+    incomplete: z.number().int(),
+  }),
+  /** 近 N 天访问热度榜 */
+  top_models: z.array(AdminStatsTopModel),
+  top_models_window_days: z.number().int(),
+});
+export type AdminStatsResponse = z.infer<typeof AdminStatsResponse>;

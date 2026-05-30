@@ -51,10 +51,7 @@ export function buildOrderMessage(opts: OrderMessageOpts): string {
  * 仅拼联系话术（无具体模特，给 ContactSection 用）。
  */
 export function buildContactMessage(agencyName: string, agencyQQ: string): string {
-  return [
-    `您好，咨询${agencyName}当日通告。`,
-    `工作室 QQ：${agencyQQ}`,
-  ].join("\n");
+  return [`您好，咨询${agencyName}当日通告。`, `工作室 QQ：${agencyQQ}`].join("\n");
 }
 
 export interface ContactQQResult {
@@ -63,7 +60,10 @@ export interface ContactQQResult {
   context: QQContext;
 }
 
-function schemeFor(qq: string, ctx: QQContext): { href: string; key: "mqq" | "mqqwpa" | "wpa" | "none"; target?: string } {
+function schemeFor(
+  qq: string,
+  ctx: QQContext,
+): { href: string; key: "mqq" | "mqqwpa" | "wpa" | "none"; target?: string } {
   switch (ctx) {
     case "ios":
     case "qq":

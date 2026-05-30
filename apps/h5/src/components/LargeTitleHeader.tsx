@@ -54,8 +54,7 @@ export function LargeTitleHeader({
         // sentinel 在 root 视口内：大字还看得到 → scrolled=false
         // sentinel 被顶上去出顶：!isIntersecting && top < rootTop → scrolled=true
         const topGone =
-          !entry.isIntersecting &&
-          entry.boundingClientRect.top < (entry.rootBounds?.top ?? 0);
+          !entry.isIntersecting && entry.boundingClientRect.top < (entry.rootBounds?.top ?? 0);
         setScrolled(topGone);
       },
       { root, threshold: 0 },
@@ -81,9 +80,7 @@ export function LargeTitleHeader({
         }}
       >
         <div className="flex h-full items-center justify-between px-5">
-          <span className="text-[15px] font-semibold text-foreground truncate">
-            {title}
-          </span>
+          <span className="text-[15px] font-semibold text-foreground truncate">{title}</span>
           {accessory ? <span className="ml-2 shrink-0">{accessory}</span> : null}
         </div>
       </div>
@@ -97,14 +94,11 @@ export function LargeTitleHeader({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            {eyebrow ? (
-              <p className="text-muted-foreground text-sm">{eyebrow}</p>
-            ) : null}
+            {eyebrow ? <p className="text-muted-foreground text-sm">{eyebrow}</p> : null}
             <h1
-              className={[
-                eyebrow ? "mt-1" : "",
-                "text-foreground cursor-default select-none",
-              ].join(" ")}
+              className={[eyebrow ? "mt-1" : "", "text-foreground cursor-default select-none"].join(
+                " ",
+              )}
               style={{
                 fontFamily: "'Noto Serif SC', serif",
                 fontSize: `${titleFontSize}px`,
@@ -115,9 +109,7 @@ export function LargeTitleHeader({
             >
               {title}
             </h1>
-            {subline ? (
-              <p className="text-muted-foreground text-sm mt-1">{subline}</p>
-            ) : null}
+            {subline ? <p className="text-muted-foreground text-sm mt-1">{subline}</p> : null}
           </div>
           {accessory ? <div className="pt-1 shrink-0">{accessory}</div> : null}
         </div>

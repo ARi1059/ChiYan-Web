@@ -44,10 +44,7 @@ export function useSelectedModel(): UseSelectedModelResult {
       // 同 tab 内已经在看模特 → replace 不堆历史；首次打开 → push 让返回键能关
       const isReplacing = Boolean(code) && code !== next;
       const search = `?m=${encodeURIComponent(next)}`;
-      navigate(
-        { pathname: location.pathname, search },
-        { replace: isReplacing },
-      );
+      navigate({ pathname: location.pathname, search }, { replace: isReplacing });
     },
     [navigate, location.pathname, code],
   );

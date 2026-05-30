@@ -19,7 +19,7 @@ const { dailyRosters } = schema;
 
 export interface RosterRecord {
   id: number;
-  date: string;          // 'YYYY-MM-DD'
+  date: string; // 'YYYY-MM-DD'
   model_ids: number[];
   note: string | null;
   created_by: number;
@@ -85,7 +85,10 @@ export async function _upsertRosterForTests(input: UpsertRosterInput): Promise<R
 
 export async function deleteByDate(date: string): Promise<boolean> {
   const db = getDb();
-  const out = await db.delete(dailyRosters).where(eq(dailyRosters.date, date)).returning({ id: dailyRosters.id });
+  const out = await db
+    .delete(dailyRosters)
+    .where(eq(dailyRosters.date, date))
+    .returning({ id: dailyRosters.id });
   return out.length > 0;
 }
 

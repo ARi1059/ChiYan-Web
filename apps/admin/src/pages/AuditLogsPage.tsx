@@ -15,11 +15,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw, ChevronDown, ChevronRight, Filter, X } from "lucide-react";
 import { useAuth } from "../store/AuthContext";
-import {
-  AdminApiError,
-  listAdminAuditLogs,
-  type AdminAuditLog,
-} from "@chiyan/api-client";
+import { AdminApiError, listAdminAuditLogs, type AdminAuditLog } from "@chiyan/api-client";
 
 const TARGET_TYPES = ["", "model", "roster", "media", "admin", "studio_settings"] as const;
 const PAGE_SIZE = 50;
@@ -289,9 +285,7 @@ export function AuditLogsPage() {
                         <div className="border-t border-[var(--border)] bg-[var(--bg)] px-3 py-3 text-xs space-y-1.5">
                           <div className="grid grid-cols-[80px_1fr] gap-2">
                             <span className="text-[var(--muted)]">User-Agent</span>
-                            <span className="font-mono break-all">
-                              {r.user_agent ?? "—"}
-                            </span>
+                            <span className="font-mono break-all">{r.user_agent ?? "—"}</span>
                           </div>
                           <div className="grid grid-cols-[80px_1fr] gap-2">
                             <span className="text-[var(--muted)]">payload</span>

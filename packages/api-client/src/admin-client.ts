@@ -415,6 +415,10 @@ export interface StudioSettingsPatch {
   qq_group?: string | null;
   home_notice?: string | null;
   notice_enabled?: boolean;
+  business_hours?: {
+    weekdays: { open: string; close: string };
+    weekends?: { open: string; close: string };
+  };
   display_config?: Partial<{
     showBust: boolean;
     showAge: boolean;
@@ -583,6 +587,35 @@ export function archiveAdminModel(id: number, accessToken: string): Promise<{ ar
   return authedDelete<{ archived: true }>(`/admin/models/${id}`, accessToken);
 }
 
+// ─── 批量导入（接口方案 §4.3 POST /admin/models/batch-import，owner + admin） ──────
+//
+// 注意：服务端用 zValidator 校验整个 rows 数组 —— 任一行 schema 不合法会整批 400，
+// 不是逐行报错。逐行 errors 只覆盖运行期失败（code 冲突 40901 / 入库异常 50001）。
+// 因此调用方（BatchImportModal）必须先把每行整成 schema-clean 再发，坏行自己拦下来报告。
+
+export interface AdminBatchImportError {
+  row_index: number;
+  code: number;
+  message: string;
+}
+
+export interface AdminBatchImportResult {
+  ok_count: number;
+  error_count: number;
+  errors: AdminBatchImportError[];
+}
+
+export function batchImportModels(
+  rows: AdminCreateModelInput[],
+  accessToken: string,
+): Promise<AdminBatchImportResult> {
+  return authedPost<{ rows: AdminCreateModelInput[] }, AdminBatchImportResult>(
+    "/admin/models/batch-import",
+    { rows },
+    accessToken,
+  );
+}
+
 // ─── Roster ───────────────────────────────────────────────────────
 
 export interface AdminRosterResponse {
@@ -611,4 +644,143 @@ export function putAdminRoster(
     { date, model_ids, ...(note !== undefined ? { note } : {}) },
     accessToken,
   );
+}
+
+// ─── 账号管理（接口方案 §4.7，Owner-only） ──────────────────────────
+//
+// 字段与 apps/api/src/routes/admin/accounts.ts 的 summarize() 一一对应（snake_case 直传）。
+// 服务端已强制 owner-only + 防自我降级/禁用/重置；UI 仅做镜像 ban + 错误提示。
+// 一次性密码（创建 / 重置密码）明文只在 HTTP 响应里出现一次，调用方负责让 owner 立刻抄走。
+
+export type AdminAccountRole = "owner" | "admin" | "operator";
+export type AdminAccountStatus = "active" | "disabled";
+
+export interface AdminAccountSummary {
+  id: number;
+  username: string;
+  display_name: string;
+  role: AdminAccountRole;
+  status: AdminAccountStatus;
+  totp_enrolled: boolean;
+  must_change_password: boolean;
+  last_login_at: string | null;
+  locked_until: string | null;
+  created_at: string;
+}
+
+export interface AdminAccountsListResponse {
+  items: AdminAccountSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export function listAdminAccounts(
+  query: { page?: number; page_size?: number },
+  accessToken: string,
+): Promise<AdminAccountsListResponse> {
+  const qs = new URLSearchParams();
+  if (query.page !== undefined) qs.set("page", String(query.page));
+  if (query.page_size !== undefined) qs.set("page_size", String(query.page_size));
+  const tail = qs.toString();
+  return authedGet<AdminAccountsListResponse>(
+    `/admin/accounts${tail ? `?${tail}` : ""}`,
+    accessToken,
+  );
+}
+
+export interface CreateAdminAccountInput {
+  username: string;
+  display_name: string;
+  role: AdminAccountRole;
+}
+
+export interface CreateAdminAccountResponse {
+  account: AdminAccountSummary;
+  one_time_password: string;
+}
+
+export function createAdminAccount(
+  input: CreateAdminAccountInput,
+  accessToken: string,
+): Promise<CreateAdminAccountResponse> {
+  return authedPost<CreateAdminAccountInput, CreateAdminAccountResponse>(
+    "/admin/accounts",
+    input,
+    accessToken,
+  );
+}
+
+export interface UpdateAdminAccountInput {
+  display_name?: string;
+  role?: AdminAccountRole;
+  status?: AdminAccountStatus;
+}
+
+export function updateAdminAccount(
+  id: number,
+  patch: UpdateAdminAccountInput,
+  accessToken: string,
+): Promise<AdminAccountSummary> {
+  return authedPatch<UpdateAdminAccountInput, AdminAccountSummary>(
+    `/admin/accounts/${id}`,
+    patch,
+    accessToken,
+  );
+}
+
+export function disableAdminAccount(id: number, accessToken: string): Promise<{ disabled: true }> {
+  return authedDelete<{ disabled: true }>(`/admin/accounts/${id}`, accessToken);
+}
+
+export function unlockAdminAccount(id: number, accessToken: string): Promise<{ unlocked: true }> {
+  return authedPost<Record<string, never>, { unlocked: true }>(
+    `/admin/accounts/${id}/unlock`,
+    {},
+    accessToken,
+  );
+}
+
+export function resetAdminAccountPassword(
+  id: number,
+  accessToken: string,
+): Promise<{ one_time_password: string }> {
+  return authedPost<Record<string, never>, { one_time_password: string }>(
+    `/admin/accounts/${id}/reset-password`,
+    {},
+    accessToken,
+  );
+}
+
+export function resetAdminAccount2fa(
+  id: number,
+  accessToken: string,
+): Promise<{ totp_reset: true }> {
+  return authedPost<Record<string, never>, { totp_reset: true }>(
+    `/admin/accounts/${id}/reset-2fa`,
+    {},
+    accessToken,
+  );
+}
+
+// ─── 数据看板（接口方案 §4.10，GET /admin/stats，owner + admin） ─────
+
+export interface AdminStatsTopModel {
+  model_id: number;
+  code: string | null;
+  nickname: string;
+  visits: number;
+}
+
+export interface AdminStatsResponse {
+  today: string;
+  visits_today: { pv: number; uv: number };
+  on_duty_today: number;
+  models: { active: number; archived: number; incomplete: number };
+  top_models: AdminStatsTopModel[];
+  top_models_window_days: number;
+}
+
+export function fetchAdminStats(accessToken: string): Promise<AdminStatsResponse> {
+  return authedGet<AdminStatsResponse>("/admin/stats", accessToken);
 }

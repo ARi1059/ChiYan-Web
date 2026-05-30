@@ -14,6 +14,7 @@ import media from "./media";
 import models from "./models";
 import roster from "./roster";
 import schedule from "./schedule";
+import stats from "./stats";
 import studioSettings from "./studio-settings";
 
 const admin = new Hono<AppContext>();
@@ -31,5 +32,6 @@ admin.route("/media", media);
 admin.route("/audit-logs", auditLogs);
 admin.route("/studio-settings", studioSettings);
 admin.route("/schedule", schedule);
+admin.route("/stats", stats);
 
 export default admin;

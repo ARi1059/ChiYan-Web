@@ -62,3 +62,31 @@ export function login(username: string, password: string): Promise<LoginResult> 
 export function verifyTotp(challenge_token: string, code: string): Promise<LoginTotpResult> {
   return call<LoginTotpResult>("/auth/login/totp", { challenge_token, code });
 }
+
+// ─── GET /auth/me ──────────────────────────────────────────────
+//
+// 登录后用 access_token 拉当前账号摘要（含 role）—— 桌面端用它做导航按角色显隐
+// （owner 才见账号管理；owner/admin 才见数据看板 / 审计日志）。GET 不挂 csrf，只带 Bearer。
+
+export interface MeResult {
+  id: number;
+  username: string;
+  display_name: string;
+  role: "owner" | "admin" | "operator";
+  must_change_password: boolean;
+  totp_enrolled: boolean;
+  last_login_at: string | null;
+}
+
+export async function getMe(accessToken: string): Promise<MeResult> {
+  const res = await fetch(`${API_BASE}/auth/me`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    credentials: "include",
+  });
+  const env = (await res.json()) as ApiEnvelope<MeResult> & Record<string, unknown>;
+  if (env.code !== 0 || env.data === undefined) {
+    throw new AuthError(env.code, env.message ?? "拉取账号信息失败", env);
+  }
+  return env.data;
+}

@@ -1,0 +1,60 @@
+name: migrate
+
+# 手动触发 prod DB 迁移（drizzle）。deploy.yml 不自动迁移（destructive 风险，见 docs/部署架构.md §5.2）：
+# schema 变更先随代码「前向兼容」部署，迁移在此手动 dispatch；drop 列/表拆两次发布。
+#
+# 机制：postgres 只听 VPS 的 127.0.0.1:5432，runner 经 SSH 端口转发（5433→VPS:5432）连上，
+# 在 runner 上跑 `pnpm --filter @chiyan/db migrate`（读 DATABASE_URL，migrations 在 packages/db/drizzle）。
+#
+# 需要的 repo secrets：
+#   DEPLOY_SSH_KEY / DEPLOY_HOST / DEPLOY_USER   —— 与 deploy.yml 共用（SSH 转发即可，无需 sudo）
+#   PROD_DATABASE_URL                            —— 例 postgresql://chiyan:<pwd>@127.0.0.1:5433/chiyan_prod
+#                                                   host/port 写隧道本地端 127.0.0.1:5433
+# 权衡：PROD_DATABASE_URL 含库密码，放 GitHub secrets 增加一处密钥面。若不接受，删本 workflow，
+#      改用 deploy/RUNBOOK.md 的「SSH 上 VPS 用 chiyan 用户手动 migrate」备选（不需新 secret）。
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "输入 MIGRATE 以确认对 prod 执行迁移"
+        required: true
+
+concurrency:
+  group: migrate-prod
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: drizzle migrate (prod)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    if: ${{ github.event.inputs.confirm == 'MIGRATE' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: SSH tunnel + drizzle migrate
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          # 后台端口转发：runner:5433 → VPS 127.0.0.1:5432，保持到 step 结束
+          ssh -i ~/.ssh/id_ed25519 -fNL 5433:127.0.0.1:5432 "$DEPLOY_USER@$DEPLOY_HOST"
+          sleep 2   # 等隧道就绪
+          pnpm --filter @chiyan/db migrate
