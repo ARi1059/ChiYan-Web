@@ -1,25 +1,32 @@
 /**
- * Models 仓储 —— 单存储双视图。
+ * Models 仓储 — drizzle/node-postgres 实现。单存储双视图：
+ *  - 公开视角（findActiveByCode / findActiveByIds / listActive / findCoverAndGalleryAssets）
+ *    返 ModelRecord / ImageAsset，刻意 strip real_name_enc / original_url
+ *  - 管理视角（adminListModels / adminFindModelByXxx / adminCreateModel / ... / adminListMedia / ...）
+ *    返 AdminModelRecord / AdminMediaRecord，含 real_name_enc / original_url / hash / file_size 等
  *
- * Phase 2/3 mock：in-memory Map 持有完整记录（内部 FullModelRecord / FullMediaRecord 含敏感列），
- * 但 export 两套视图：
- *  - 公开视角（findActiveByCode / findActiveByIds / listActive / findCoverAndGalleryAssets）→ 返 ModelRecord / ImageAsset，刻意 strip real_name_enc / original_url
- *  - 管理视角（adminListModels / adminFindModelById / adminCreateModel / ... / adminListMedia / ...）→ 返 AdminModelRecord / AdminMediaRecord，含全字段
+ * 域到 schema 字段映射：drizzle 选出来的 camelCase row（heightCm/qqGroup/...）
+ * 在 toModelDomain / toMediaDomain 里转回 domain snake_case（height_cm/qq/...），
+ * 让 7 个 route handler + 6 个测试文件 0 改动。
  *
- * 单存储的好处：管理员新建模特 → 公开 /models 立刻可见，无需双写。Step 7 切真 Drizzle 时，
- * 公开 query 显式 select 公开列、管理 query 显式 select 全列，仍是两套视图同一张表。
+ * 冲突错误：catch pg 错误码 23505（唯一约束）后映射成 ModelsRepoConflictError，
+ * 按 constraint name 区分 code/hash 冲突。
  *
- * 6 条约定（对齐 admin-repo.ts）：
- *  1. 函数 async，签名稳定
- *  2. Map-backed in-memory store
- *  3. clone-on-return
- *  4. _insertXxxForTests 测试种子
- *  5. _resetXxxForTests beforeEach 清理
- *  6. 领域动词命名
+ * 跨表写（adminUpdateMedia.is_cover 同步 models.cover_asset_id）放 db.transaction()。
  */
 
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { schema } from "@chiyan/db";
 import type { pub } from "@chiyan/types";
+import { getDb } from "./db";
+
 type ImageAsset = pub.ImageAsset;
+
+const models = schema.models;
+const mediaAssets = schema.mediaAssets;
+const admins = schema.admins;
+
+// ─── 公开 / 管理类型（接口签名保留） ──────────────────────────────
 
 export type ModelStatus = "active" | "archived";
 
@@ -59,8 +66,11 @@ export interface ModelRecord {
   hip: number | null;
   shoe_size_eu: number | null;
   age_range: string | null;
+  age: number | null;
   hometown: string | null;
   city: string | null;
+  district: string | null;
+  qq: string | null;
   style_tags: string[];
   available_types: string[];
   can_remote: boolean;
@@ -73,20 +83,10 @@ export interface ModelRecord {
   updated_at: Date;
 }
 
-export interface ListActiveOpts {
-  type?: string;
-  style?: string;
-  q?: string;
-  page: number;
-  page_size: number;
-}
-
-/** 管理视角：含 real_name_enc（AES-GCM 加密的真名 blob）。 */
 export interface AdminModelRecord extends ModelRecord {
   real_name_enc: Uint8Array | null;
 }
 
-/** 管理视角：含 original_url（R2 私有桶）+ 上传元数据。 */
 export interface AdminMediaRecord extends MediaAssetRecord {
   original_url: string;
   file_size: number;
@@ -95,83 +95,106 @@ export interface AdminMediaRecord extends MediaAssetRecord {
   uploaded_at: Date;
 }
 
-/** 内部完整记录 —— 仓库 Map 实际持有这个；clone 时按视角裁剪。 */
-type FullModelRecord = AdminModelRecord;
-type FullMediaRecord = AdminMediaRecord;
-
-const modelsById = new Map<number, FullModelRecord>();
-const modelsByCode = new Map<string, number>();
-const mediaById = new Map<number, FullMediaRecord>();
-const mediaByHash = new Map<string, number>();
-let nextModelId = 1;
-let nextMediaId = 1;
-
-function cloneModel(m: FullModelRecord): ModelRecord {
-  // 公开视角：strip real_name_enc。
-  return {
-    id: m.id,
-    code: m.code,
-    nickname: m.nickname,
-    status: m.status,
-    height_cm: m.height_cm,
-    weight_kg: m.weight_kg,
-    bust: m.bust,
-    waist: m.waist,
-    hip: m.hip,
-    shoe_size_eu: m.shoe_size_eu,
-    age_range: m.age_range,
-    hometown: m.hometown,
-    city: m.city,
-    style_tags: [...m.style_tags],
-    available_types: [...m.available_types],
-    can_remote: m.can_remote,
-    is_minor: m.is_minor,
-    cover_asset_id: m.cover_asset_id,
-    gallery_asset_ids: [...m.gallery_asset_ids],
-    portfolio: m.portfolio.map((p) => ({ ...p })),
-    cooperation_history: m.cooperation_history.map((c) => ({ ...c })),
-    created_at: m.created_at,
-    updated_at: m.updated_at,
-  };
+export interface ListActiveOpts {
+  type?: string;
+  style?: string;
+  q?: string;
+  page: number;
+  page_size: number;
 }
 
-function cloneAdminModel(m: FullModelRecord): AdminModelRecord {
-  // 管理视角：含 real_name_enc 副本（避免外部 mutate 落到 Map）。
-  const base = cloneModel(m);
-  const enc = m.real_name_enc;
-  return {
-    ...base,
-    real_name_enc: enc == null ? null : new Uint8Array(enc),
-  };
+export class ModelsRepoConflictError extends Error {
+  constructor(public field: string) {
+    super(`conflict on ${field}`);
+    this.name = "ModelsRepoConflictError";
+  }
 }
 
-function cloneMedia(a: FullMediaRecord): MediaAssetRecord {
-  // 公开视角：strip original_url / hash / file_size / uploaded_by / uploaded_at。
-  return {
-    id: a.id,
-    model_id: a.model_id,
-    type: a.type,
-    url: a.url,
-    thumb_url: a.thumb_url,
-    width: a.width,
-    height: a.height,
-    has_watermark: a.has_watermark,
-  };
-}
+// ─── 字段映射 helpers ──────────────────────────────────────────────
 
-function cloneAdminMedia(a: FullMediaRecord): AdminMediaRecord {
-  return {
-    ...cloneMedia(a),
-    original_url: a.original_url,
-    file_size: a.file_size,
-    hash: a.hash,
-    uploaded_by: a.uploaded_by,
-    uploaded_at: a.uploaded_at,
-  };
-}
+type ModelRow = typeof models.$inferSelect;
+type MediaRow = typeof mediaAssets.$inferSelect;
 
 /**
- * 三态返回：
+ * schema 把 portfolio / cooperation_history 标为 `Record<string, unknown>[]`（jsonb 通用）；
+ * domain 用了 ModelPortfolioItem / ModelCooperationItem（有具名字段）。
+ * 写入 jsonb 时用 toJsonb 退化为通用 Record；读出时直接 cast 回 domain 形态。
+ */
+function toJsonb<T>(arr: T[] | undefined): Record<string, unknown>[] | undefined {
+  return arr as unknown as Record<string, unknown>[] | undefined;
+}
+
+function toModelDomain(r: ModelRow): ModelRecord {
+  return {
+    id: r.id,
+    code: r.code,
+    nickname: r.nickname,
+    status: r.status,
+    height_cm: r.heightCm,
+    weight_kg: r.weightKg,
+    bust: r.bust,
+    waist: r.waist,
+    hip: r.hip,
+    shoe_size_eu: r.shoeSizeEu,
+    age_range: r.ageRange,
+    age: r.age,
+    hometown: r.hometown,
+    city: r.city,
+    district: r.district,
+    qq: r.qq,
+    style_tags: r.styleTags,
+    available_types: r.availableTypes,
+    can_remote: r.canRemote,
+    is_minor: r.isMinor,
+    cover_asset_id: r.coverAssetId,
+    gallery_asset_ids: r.galleryAssetIds,
+    portfolio: r.portfolio as unknown as ModelPortfolioItem[],
+    cooperation_history: r.cooperationHistory as unknown as ModelCooperationItem[],
+    created_at: r.createdAt,
+    updated_at: r.updatedAt,
+  };
+}
+
+function toAdminModelDomain(r: ModelRow): AdminModelRecord {
+  return { ...toModelDomain(r), real_name_enc: r.realNameEnc ?? null };
+}
+
+function toMediaDomain(r: MediaRow): MediaAssetRecord {
+  return {
+    id: r.id,
+    model_id: r.modelId,
+    type: r.type,
+    url: r.url,
+    thumb_url: r.thumbUrl,
+    width: r.width,
+    height: r.height,
+    has_watermark: r.hasWatermark,
+  };
+}
+
+function toAdminMediaDomain(r: MediaRow): AdminMediaRecord {
+  return {
+    ...toMediaDomain(r),
+    original_url: r.originalUrl,
+    file_size: r.fileSize ?? 0,
+    hash: r.hash,
+    uploaded_by: r.uploadedBy,
+    uploaded_at: r.uploadedAt,
+  };
+}
+
+function isUniqueViolation(e: unknown): { code: string; constraint?: string } | null {
+  if (e && typeof e === "object" && "code" in e && (e as { code: string }).code === "23505") {
+    const constraint = (e as { constraint?: string }).constraint;
+    return { code: "23505", constraint };
+  }
+  return null;
+}
+
+// ─── 公开视角 ──────────────────────────────────────────────────────
+
+/**
+ * 三态返回（handler 翻译为 200/404/410）：
  *  - 'not_found'  → handler 回 40401
  *  - 'archived'   → handler 回 41001 sub_code=archived（必须 Cache-Control: no-store）
  *  - ModelRecord  → handler 回 200
@@ -179,59 +202,72 @@ function cloneAdminMedia(a: FullMediaRecord): AdminMediaRecord {
 export async function findActiveByCode(
   code: string,
 ): Promise<ModelRecord | "not_found" | "archived"> {
-  const id = modelsByCode.get(code);
-  if (id == null) return "not_found";
-  const r = modelsById.get(id);
+  const db = getDb();
+  const r = await db.query.models.findFirst({ where: eq(models.code, code) });
   if (!r) return "not_found";
   if (r.status === "archived") return "archived";
-  return cloneModel(r);
+  return toModelDomain(r);
 }
 
-/** today endpoint 使用：按 roster.model_ids 批量取，保持入参顺序，跳过 archived/缺失。 */
+/** today endpoint 使用：按入参顺序，跳过 archived/缺失（drizzle inArray 不保序，客户端 reorder）。 */
 export async function findActiveByIds(ids: number[]): Promise<ModelRecord[]> {
+  if (ids.length === 0) return [];
+  const db = getDb();
+  const rows = await db.query.models.findMany({
+    where: and(inArray(models.id, ids), eq(models.status, "active")),
+  });
+  const byId = new Map(rows.map((r) => [r.id, r]));
   const out: ModelRecord[] = [];
   for (const id of ids) {
-    const r = modelsById.get(id);
-    if (!r || r.status === "archived") continue;
-    out.push(cloneModel(r));
+    const r = byId.get(id);
+    if (r) out.push(toModelDomain(r));
   }
   return out;
 }
 
-/** 列表 endpoint 使用：filter + 简单分页；mock 阶段全内存，Step 7 换成 db.query。 */
 export async function listActive(
   opts: ListActiveOpts,
 ): Promise<{ items: ModelRecord[]; total: number }> {
-  const q = opts.q?.trim().toLowerCase();
-  const filtered: FullModelRecord[] = [];
-  for (const r of modelsById.values()) {
-    if (r.status !== "active") continue;
-    if (opts.type && !r.available_types.includes(opts.type)) continue;
-    if (opts.style && !r.style_tags.includes(opts.style)) continue;
-    if (q && !r.nickname.toLowerCase().includes(q)) continue;
-    filtered.push(r);
+  const db = getDb();
+  const conds = [eq(models.status, "active")];
+  if (opts.type) {
+    // jsonb ? text：available_types 数组里"包含" type
+    conds.push(sql`${models.availableTypes} @> ${JSON.stringify([opts.type])}::jsonb`);
   }
-  filtered.sort((a, b) => a.id - b.id);
-  const total = filtered.length;
-  const start = (opts.page - 1) * opts.page_size;
-  const items = filtered.slice(start, start + opts.page_size).map(cloneModel);
-  return { items, total };
+  if (opts.style) {
+    conds.push(sql`${models.styleTags} @> ${JSON.stringify([opts.style])}::jsonb`);
+  }
+  if (opts.q) {
+    conds.push(sql`${models.nickname} ILIKE ${"%" + opts.q.trim() + "%"}`);
+  }
+  const where = conds.length === 1 ? conds[0] : and(...conds);
+
+  const totalRow = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(models)
+    .where(where);
+  const total = totalRow[0]?.c ?? 0;
+
+  const offset = Math.max(0, (opts.page - 1) * opts.page_size);
+  const rows = await db
+    .select()
+    .from(models)
+    .where(where)
+    .orderBy(asc(models.id))
+    .limit(opts.page_size)
+    .offset(offset);
+
+  return { items: rows.map(toModelDomain), total };
 }
 
-function mediaToImageAsset(a: FullMediaRecord): ImageAsset {
-  // mock 阶段：width/height 必须给值（schema 要求 positive int）。
-  // 真实 R2 + Cloudflare Images 接入后由变体生成器写回正确值。
+function mediaToImageAsset(a: MediaRow): ImageAsset {
   const width = a.width ?? 1200;
   const height = a.height ?? 1600;
   const src = a.url;
-  const thumb = a.thumb_url ?? a.url;
+  const thumb = a.thumbUrl ?? a.url;
   return {
     src,
-    srcset: {
-      "1x": thumb,
-      "2x": src,
-      "3x": src,
-    },
+    srcset: { "1x": thumb, "2x": src, "3x": src },
     width,
     height,
   };
@@ -244,28 +280,60 @@ function mediaToImageAsset(a: FullMediaRecord): ImageAsset {
 export async function findCoverAndGalleryAssets(
   model: Pick<ModelRecord, "id" | "cover_asset_id" | "gallery_asset_ids">,
 ): Promise<{ cover: ImageAsset | null; gallery: ImageAsset[] }> {
+  const db = getDb();
   let cover: ImageAsset | null = null;
   if (model.cover_asset_id != null) {
-    const a = mediaById.get(model.cover_asset_id);
-    if (a && (a.model_id === model.id || a.model_id == null)) {
+    const a = await db.query.mediaAssets.findFirst({
+      where: eq(mediaAssets.id, model.cover_asset_id),
+    });
+    if (a && (a.modelId === model.id || a.modelId == null)) {
       cover = mediaToImageAsset(a);
     }
   }
   const gallery: ImageAsset[] = [];
-  for (const gid of model.gallery_asset_ids) {
-    const a = mediaById.get(gid);
-    if (!a) continue;
-    if (a.model_id !== model.id && a.model_id != null) continue;
-    gallery.push(mediaToImageAsset(a));
+  if (model.gallery_asset_ids.length > 0) {
+    const rows = await db.query.mediaAssets.findMany({
+      where: inArray(mediaAssets.id, model.gallery_asset_ids),
+    });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    for (const gid of model.gallery_asset_ids) {
+      const a = byId.get(gid);
+      if (!a) continue;
+      if (a.modelId !== model.id && a.modelId != null) continue;
+      gallery.push(mediaToImageAsset(a));
+    }
   }
   return { cover, gallery };
 }
 
-// ─── 测试种子 ──────────────────────────────────────────────
+// ─── 测试 helpers ──────────────────────────────────────────────────
 
 /**
- * 测试用 insert：按 code upsert（模拟真实 DB unique(code) 上的 ON CONFLICT DO UPDATE）。
- * 多次同 code 调用不会在 store 里留多条 —— 便于"先种占位 → 再带 cover 重新种"的 helper 模式。
+ * sentinel admin 用于 media_assets.uploaded_by 外键。
+ * admin-repo 仍是 mock（不写 drizzle admins 表），所以 media insert 时必须
+ * 在 drizzle 真表里有至少一个 admin。约定 id=1 永远为 sentinel。
+ */
+async function ensureSentinelAdmin(): Promise<void> {
+  const db = getDb();
+  await db
+    .insert(admins)
+    .values({
+      id: 1,
+      username: "__sentinel__",
+      displayName: "sentinel",
+      passwordHash: "$2a$12$" + "x".repeat(53), // 占位 bcrypt 长度，不被消费
+      role: "owner",
+      totpEnrolled: false,
+      mustChangePassword: false,
+      failedLoginCount: 0,
+      status: "active",
+    })
+    .onConflictDoNothing({ target: admins.id });
+}
+
+/**
+ * 测试用 insert：按 code upsert（模拟"先种占位 → 再带 cover 重新种"）。
+ * cover_asset_id 等可空字段输入是 null 时显式落空（不是 undefined 跳过）。
  */
 export async function _insertModelForTests(
   record: Omit<ModelRecord, "id" | "created_at" | "updated_at"> &
@@ -273,21 +341,69 @@ export async function _insertModelForTests(
       real_name_enc?: Uint8Array | null;
     },
 ): Promise<ModelRecord> {
-  const existingId = modelsByCode.get(record.code);
-  const id = existingId ?? nextModelId++;
-  const existing = existingId != null ? modelsById.get(existingId) : undefined;
-  const now = new Date();
-  const { real_name_enc, ...rest } = record;
-  const full: FullModelRecord = {
-    ...rest,
-    id,
-    real_name_enc: real_name_enc ?? existing?.real_name_enc ?? null,
-    created_at: record.created_at ?? existing?.created_at ?? now,
-    updated_at: record.updated_at ?? now,
+  const db = getDb();
+  const values = {
+    code: record.code,
+    nickname: record.nickname,
+    status: record.status,
+    realNameEnc: record.real_name_enc ?? null,
+    heightCm: record.height_cm,
+    weightKg: record.weight_kg,
+    bust: record.bust,
+    waist: record.waist,
+    hip: record.hip,
+    shoeSizeEu: record.shoe_size_eu,
+    ageRange: record.age_range,
+    age: record.age,
+    hometown: record.hometown,
+    city: record.city,
+    district: record.district,
+    qq: record.qq,
+    styleTags: record.style_tags,
+    availableTypes: record.available_types,
+    canRemote: record.can_remote,
+    isMinor: record.is_minor,
+    coverAssetId: record.cover_asset_id,
+    galleryAssetIds: record.gallery_asset_ids,
+    portfolio: toJsonb(record.portfolio) ?? [],
+    cooperationHistory: toJsonb(record.cooperation_history) ?? [],
+    ...(record.created_at ? { createdAt: record.created_at } : {}),
+    ...(record.updated_at ? { updatedAt: record.updated_at } : {}),
   };
-  modelsById.set(id, full);
-  modelsByCode.set(full.code, id);
-  return cloneModel(full);
+  const [row] = await db
+    .insert(models)
+    .values(values)
+    .onConflictDoUpdate({
+      target: models.code,
+      set: {
+        nickname: values.nickname,
+        status: values.status,
+        realNameEnc: values.realNameEnc,
+        heightCm: values.heightCm,
+        weightKg: values.weightKg,
+        bust: values.bust,
+        waist: values.waist,
+        hip: values.hip,
+        shoeSizeEu: values.shoeSizeEu,
+        ageRange: values.ageRange,
+        age: values.age,
+        hometown: values.hometown,
+        city: values.city,
+        district: values.district,
+        qq: values.qq,
+        styleTags: values.styleTags,
+        availableTypes: values.availableTypes,
+        canRemote: values.canRemote,
+        isMinor: values.isMinor,
+        coverAssetId: values.coverAssetId,
+        galleryAssetIds: values.galleryAssetIds,
+        portfolio: values.portfolio ?? [],
+        cooperationHistory: values.cooperationHistory ?? [],
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+  return toModelDomain(row!);
 }
 
 export async function _insertMediaForTests(
@@ -302,39 +418,38 @@ export async function _insertMediaForTests(
       }
     >,
 ): Promise<MediaAssetRecord> {
-  const id = record.id ?? nextMediaId++;
-  if (record.id != null && id >= nextMediaId) nextMediaId = id + 1;
-  const hash = record.hash ?? `mockhash${id.toString().padStart(56, "0")}`;
-  const full: FullMediaRecord = {
-    id,
-    model_id: record.model_id,
+  const db = getDb();
+  await ensureSentinelAdmin();
+  const idFallback = Math.floor(Math.random() * 1_000_000) + 1;
+  const hash = record.hash ?? `mockhash${(record.id ?? idFallback).toString().padStart(56, "0")}`;
+  const values = {
+    ...(record.id != null ? { id: record.id } : {}),
+    modelId: record.model_id,
     type: record.type,
     url: record.url,
-    thumb_url: record.thumb_url,
+    originalUrl: record.original_url ?? record.url,
+    thumbUrl: record.thumb_url,
     width: record.width,
     height: record.height,
-    has_watermark: record.has_watermark,
-    original_url: record.original_url ?? record.url,
-    file_size: record.file_size ?? 0,
+    fileSize: record.file_size ?? 0,
     hash,
-    uploaded_by: record.uploaded_by ?? 1,
-    uploaded_at: record.uploaded_at ?? new Date(),
+    hasWatermark: record.has_watermark,
+    uploadedBy: record.uploaded_by ?? 1,
+    ...(record.uploaded_at ? { uploadedAt: record.uploaded_at } : {}),
   };
-  mediaById.set(id, full);
-  mediaByHash.set(hash, id);
-  return cloneMedia(full);
+  const [row] = await db.insert(mediaAssets).values(values).returning();
+  return toMediaDomain(row!);
 }
 
-export function _resetModelsRepoForTests(): void {
-  modelsById.clear();
-  modelsByCode.clear();
-  mediaById.clear();
-  mediaByHash.clear();
-  nextModelId = 1;
-  nextMediaId = 1;
+export async function _resetModelsRepoForTests(): Promise<void> {
+  const db = getDb();
+  // CASCADE：清 models / media_assets 时，引用它们的 rosters/audit/schedule 也会被清；够测试用。
+  await db.execute(
+    sql`TRUNCATE TABLE media_assets, models, admins, daily_rosters RESTART IDENTITY CASCADE`,
+  );
 }
 
-// ─── 管理视角 ──────────────────────────────────────────────
+// ─── 管理视角 ──────────────────────────────────────────────────────
 
 export interface AdminListModelsOpts {
   status?: ModelStatus;
@@ -348,33 +463,42 @@ export interface AdminListModelsOpts {
 export async function adminListModels(
   opts: AdminListModelsOpts,
 ): Promise<{ items: AdminModelRecord[]; total: number }> {
-  const q = opts.q?.trim().toLowerCase();
-  const filtered: FullModelRecord[] = [];
-  for (const r of modelsById.values()) {
-    if (opts.status && r.status !== opts.status) continue;
-    if (opts.type && !r.available_types.includes(opts.type)) continue;
-    if (opts.style && !r.style_tags.includes(opts.style)) continue;
-    if (q && !r.nickname.toLowerCase().includes(q)) continue;
-    filtered.push(r);
-  }
-  filtered.sort((a, b) => a.id - b.id);
-  const total = filtered.length;
-  const start = (opts.page - 1) * opts.page_size;
-  const items = filtered.slice(start, start + opts.page_size).map(cloneAdminModel);
-  return { items, total };
+  const db = getDb();
+  const conds = [];
+  if (opts.status) conds.push(eq(models.status, opts.status));
+  if (opts.type)
+    conds.push(sql`${models.availableTypes} @> ${JSON.stringify([opts.type])}::jsonb`);
+  if (opts.style)
+    conds.push(sql`${models.styleTags} @> ${JSON.stringify([opts.style])}::jsonb`);
+  if (opts.q) conds.push(sql`${models.nickname} ILIKE ${"%" + opts.q.trim() + "%"}`);
+  const where = conds.length === 0 ? undefined : conds.length === 1 ? conds[0] : and(...conds);
+
+  const totalRow = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(models)
+    .where(where);
+  const total = totalRow[0]?.c ?? 0;
+  const offset = Math.max(0, (opts.page - 1) * opts.page_size);
+  const rows = await db
+    .select()
+    .from(models)
+    .where(where)
+    .orderBy(asc(models.id))
+    .limit(opts.page_size)
+    .offset(offset);
+  return { items: rows.map(toAdminModelDomain), total };
 }
 
-/** 含 archived；管理详情用。 */
 export async function adminFindModelById(id: number): Promise<AdminModelRecord | undefined> {
-  const r = modelsById.get(id);
-  return r ? cloneAdminModel(r) : undefined;
+  const db = getDb();
+  const r = await db.query.models.findFirst({ where: eq(models.id, id) });
+  return r ? toAdminModelDomain(r) : undefined;
 }
 
 export async function adminFindModelByCode(code: string): Promise<AdminModelRecord | undefined> {
-  const id = modelsByCode.get(code);
-  if (id == null) return undefined;
-  const r = modelsById.get(id);
-  return r ? cloneAdminModel(r) : undefined;
+  const db = getDb();
+  const r = await db.query.models.findFirst({ where: eq(models.code, code) });
+  return r ? toAdminModelDomain(r) : undefined;
 }
 
 export interface AdminCreateModelInput {
@@ -388,8 +512,11 @@ export interface AdminCreateModelInput {
   hip?: number | null;
   shoe_size_eu?: number | null;
   age_range?: string | null;
+  age?: number | null;
   hometown?: string | null;
   city?: string | null;
+  district?: string | null;
+  qq?: string | null;
   style_tags?: string[];
   available_types?: string[];
   can_remote?: boolean;
@@ -400,50 +527,43 @@ export interface AdminCreateModelInput {
   cooperation_history?: ModelCooperationItem[];
 }
 
-export class ModelsRepoConflictError extends Error {
-  constructor(field: string) {
-    super(`conflict on ${field}`);
-    this.name = "ModelsRepoConflictError";
-  }
-}
-
 export async function adminCreateModel(input: AdminCreateModelInput): Promise<AdminModelRecord> {
-  if (modelsByCode.has(input.code)) {
-    throw new ModelsRepoConflictError("code");
+  const db = getDb();
+  try {
+    const [row] = await db
+      .insert(models)
+      .values({
+        code: input.code,
+        nickname: input.nickname,
+        realNameEnc: input.real_name_enc ?? null,
+        heightCm: input.height_cm ?? null,
+        weightKg: input.weight_kg ?? null,
+        bust: input.bust ?? null,
+        waist: input.waist ?? null,
+        hip: input.hip ?? null,
+        shoeSizeEu: input.shoe_size_eu ?? null,
+        ageRange: input.age_range ?? null,
+        age: input.age ?? null,
+        hometown: input.hometown ?? null,
+        city: input.city ?? null,
+        district: input.district ?? null,
+        qq: input.qq ?? null,
+        styleTags: input.style_tags ?? [],
+        availableTypes: input.available_types ?? [],
+        canRemote: input.can_remote ?? false,
+        isMinor: input.is_minor ?? false,
+        coverAssetId: input.cover_asset_id ?? null,
+        galleryAssetIds: input.gallery_asset_ids ?? [],
+        portfolio: toJsonb(input.portfolio) ?? [],
+        cooperationHistory: toJsonb(input.cooperation_history) ?? [],
+      })
+      .returning();
+    return toAdminModelDomain(row!);
+  } catch (e) {
+    const ue = isUniqueViolation(e);
+    if (ue && ue.constraint?.includes("code")) throw new ModelsRepoConflictError("code");
+    throw e;
   }
-  const id = nextModelId++;
-  const now = new Date();
-  const full: FullModelRecord = {
-    id,
-    code: input.code,
-    nickname: input.nickname,
-    status: "active",
-    real_name_enc: input.real_name_enc ?? null,
-    height_cm: input.height_cm ?? null,
-    weight_kg: input.weight_kg ?? null,
-    bust: input.bust ?? null,
-    waist: input.waist ?? null,
-    hip: input.hip ?? null,
-    shoe_size_eu: input.shoe_size_eu ?? null,
-    age_range: input.age_range ?? null,
-    hometown: input.hometown ?? null,
-    city: input.city ?? null,
-    style_tags: input.style_tags ? [...input.style_tags] : [],
-    available_types: input.available_types ? [...input.available_types] : [],
-    can_remote: input.can_remote ?? false,
-    is_minor: input.is_minor ?? false,
-    cover_asset_id: input.cover_asset_id ?? null,
-    gallery_asset_ids: input.gallery_asset_ids ? [...input.gallery_asset_ids] : [],
-    portfolio: input.portfolio ? input.portfolio.map((p) => ({ ...p })) : [],
-    cooperation_history: input.cooperation_history
-      ? input.cooperation_history.map((c) => ({ ...c }))
-      : [],
-    created_at: now,
-    updated_at: now,
-  };
-  modelsById.set(id, full);
-  modelsByCode.set(full.code, id);
-  return cloneAdminModel(full);
 }
 
 export type AdminUpdateModelPatch = Partial<Omit<AdminCreateModelInput, "code">>;
@@ -452,47 +572,54 @@ export async function adminUpdateModel(
   id: number,
   patch: AdminUpdateModelPatch,
 ): Promise<AdminModelRecord | undefined> {
-  const r = modelsById.get(id);
-  if (!r) return undefined;
-  if (patch.nickname !== undefined) r.nickname = patch.nickname;
-  if (patch.real_name_enc !== undefined) r.real_name_enc = patch.real_name_enc;
-  if (patch.height_cm !== undefined) r.height_cm = patch.height_cm;
-  if (patch.weight_kg !== undefined) r.weight_kg = patch.weight_kg;
-  if (patch.bust !== undefined) r.bust = patch.bust;
-  if (patch.waist !== undefined) r.waist = patch.waist;
-  if (patch.hip !== undefined) r.hip = patch.hip;
-  if (patch.shoe_size_eu !== undefined) r.shoe_size_eu = patch.shoe_size_eu;
-  if (patch.age_range !== undefined) r.age_range = patch.age_range;
-  if (patch.hometown !== undefined) r.hometown = patch.hometown;
-  if (patch.city !== undefined) r.city = patch.city;
-  if (patch.style_tags !== undefined) r.style_tags = [...patch.style_tags];
-  if (patch.available_types !== undefined) r.available_types = [...patch.available_types];
-  if (patch.can_remote !== undefined) r.can_remote = patch.can_remote;
-  if (patch.is_minor !== undefined) r.is_minor = patch.is_minor;
-  if (patch.cover_asset_id !== undefined) r.cover_asset_id = patch.cover_asset_id;
-  if (patch.gallery_asset_ids !== undefined) r.gallery_asset_ids = [...patch.gallery_asset_ids];
-  if (patch.portfolio !== undefined) r.portfolio = patch.portfolio.map((p) => ({ ...p }));
-  if (patch.cooperation_history !== undefined) {
-    r.cooperation_history = patch.cooperation_history.map((c) => ({ ...c }));
-  }
-  r.updated_at = new Date();
-  return cloneAdminModel(r);
+  const db = getDb();
+  const set: Partial<typeof models.$inferInsert> = { updatedAt: new Date() };
+  if (patch.nickname !== undefined) set.nickname = patch.nickname;
+  if (patch.real_name_enc !== undefined) set.realNameEnc = patch.real_name_enc;
+  if (patch.height_cm !== undefined) set.heightCm = patch.height_cm;
+  if (patch.weight_kg !== undefined) set.weightKg = patch.weight_kg;
+  if (patch.bust !== undefined) set.bust = patch.bust;
+  if (patch.waist !== undefined) set.waist = patch.waist;
+  if (patch.hip !== undefined) set.hip = patch.hip;
+  if (patch.shoe_size_eu !== undefined) set.shoeSizeEu = patch.shoe_size_eu;
+  if (patch.age_range !== undefined) set.ageRange = patch.age_range;
+  if (patch.age !== undefined) set.age = patch.age;
+  if (patch.hometown !== undefined) set.hometown = patch.hometown;
+  if (patch.city !== undefined) set.city = patch.city;
+  if (patch.district !== undefined) set.district = patch.district;
+  if (patch.qq !== undefined) set.qq = patch.qq;
+  if (patch.style_tags !== undefined) set.styleTags = patch.style_tags;
+  if (patch.available_types !== undefined) set.availableTypes = patch.available_types;
+  if (patch.can_remote !== undefined) set.canRemote = patch.can_remote;
+  if (patch.is_minor !== undefined) set.isMinor = patch.is_minor;
+  if (patch.cover_asset_id !== undefined) set.coverAssetId = patch.cover_asset_id;
+  if (patch.gallery_asset_ids !== undefined) set.galleryAssetIds = patch.gallery_asset_ids;
+  if (patch.portfolio !== undefined) set.portfolio = toJsonb(patch.portfolio);
+  if (patch.cooperation_history !== undefined)
+    set.cooperationHistory = toJsonb(patch.cooperation_history);
+
+  const [row] = await db.update(models).set(set).where(eq(models.id, id)).returning();
+  return row ? toAdminModelDomain(row) : undefined;
 }
 
 export async function adminArchiveModel(id: number): Promise<AdminModelRecord | undefined> {
-  const r = modelsById.get(id);
-  if (!r) return undefined;
-  r.status = "archived";
-  r.updated_at = new Date();
-  return cloneAdminModel(r);
+  const db = getDb();
+  const [row] = await db
+    .update(models)
+    .set({ status: "archived", updatedAt: new Date() })
+    .where(eq(models.id, id))
+    .returning();
+  return row ? toAdminModelDomain(row) : undefined;
 }
 
 export async function adminRestoreModel(id: number): Promise<AdminModelRecord | undefined> {
-  const r = modelsById.get(id);
-  if (!r) return undefined;
-  r.status = "active";
-  r.updated_at = new Date();
-  return cloneAdminModel(r);
+  const db = getDb();
+  const [row] = await db
+    .update(models)
+    .set({ status: "active", updatedAt: new Date() })
+    .where(eq(models.id, id))
+    .returning();
+  return row ? toAdminModelDomain(row) : undefined;
 }
 
 export interface AdminListMediaOpts {
@@ -505,22 +632,32 @@ export interface AdminListMediaOpts {
 export async function adminListMedia(
   opts: AdminListMediaOpts,
 ): Promise<{ items: AdminMediaRecord[]; total: number }> {
-  const filtered: FullMediaRecord[] = [];
-  for (const a of mediaById.values()) {
-    if (opts.model_id !== undefined && a.model_id !== opts.model_id) continue;
-    if (opts.type !== undefined && a.type !== opts.type) continue;
-    filtered.push(a);
-  }
-  filtered.sort((a, b) => b.id - a.id);
-  const total = filtered.length;
-  const start = (opts.page - 1) * opts.page_size;
-  const items = filtered.slice(start, start + opts.page_size).map(cloneAdminMedia);
-  return { items, total };
+  const db = getDb();
+  const conds = [];
+  if (opts.model_id !== undefined) conds.push(eq(mediaAssets.modelId, opts.model_id));
+  if (opts.type !== undefined) conds.push(eq(mediaAssets.type, opts.type));
+  const where = conds.length === 0 ? undefined : conds.length === 1 ? conds[0] : and(...conds);
+
+  const totalRow = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(mediaAssets)
+    .where(where);
+  const total = totalRow[0]?.c ?? 0;
+  const offset = Math.max(0, (opts.page - 1) * opts.page_size);
+  const rows = await db
+    .select()
+    .from(mediaAssets)
+    .where(where)
+    .orderBy(sql`${mediaAssets.id} desc`)
+    .limit(opts.page_size)
+    .offset(offset);
+  return { items: rows.map(toAdminMediaDomain), total };
 }
 
 export async function adminFindMediaById(id: number): Promise<AdminMediaRecord | undefined> {
-  const a = mediaById.get(id);
-  return a ? cloneAdminMedia(a) : undefined;
+  const db = getDb();
+  const r = await db.query.mediaAssets.findFirst({ where: eq(mediaAssets.id, id) });
+  return r ? toAdminMediaDomain(r) : undefined;
 }
 
 export interface AdminCreateMediaInput {
@@ -538,18 +675,30 @@ export interface AdminCreateMediaInput {
 }
 
 export async function adminCreateMedia(input: AdminCreateMediaInput): Promise<AdminMediaRecord> {
-  if (mediaByHash.has(input.hash)) {
-    throw new ModelsRepoConflictError("hash");
+  const db = getDb();
+  try {
+    const [row] = await db
+      .insert(mediaAssets)
+      .values({
+        modelId: input.model_id,
+        type: input.type,
+        url: input.url,
+        originalUrl: input.original_url,
+        thumbUrl: input.thumb_url,
+        width: input.width,
+        height: input.height,
+        fileSize: input.file_size,
+        hash: input.hash,
+        hasWatermark: input.has_watermark,
+        uploadedBy: input.uploaded_by,
+      })
+      .returning();
+    return toAdminMediaDomain(row!);
+  } catch (e) {
+    const ue = isUniqueViolation(e);
+    if (ue && ue.constraint?.includes("hash")) throw new ModelsRepoConflictError("hash");
+    throw e;
   }
-  const id = nextMediaId++;
-  const full: FullMediaRecord = {
-    ...input,
-    id,
-    uploaded_at: new Date(),
-  };
-  mediaById.set(id, full);
-  mediaByHash.set(input.hash, id);
-  return cloneAdminMedia(full);
 }
 
 export interface AdminUpdateMediaPatch {
@@ -559,44 +708,58 @@ export interface AdminUpdateMediaPatch {
 }
 
 /**
- * patch is_cover=true 时，同步把所属 model.cover_asset_id 指向本条；
- * is_cover=false 时，若 model.cover_asset_id 正指向本条则清零。
- * Step 7 切真 DB 时这两个 UPDATE 要在同一事务里。
+ * is_cover 跨表写：必须 transaction —— 同时更新 media + models.cover_asset_id。
+ * 否则可能出现"media 改了 is_cover 但 model.cover_asset_id 没改"的中间态。
  */
 export async function adminUpdateMedia(
   id: number,
   patch: AdminUpdateMediaPatch,
 ): Promise<AdminMediaRecord | undefined> {
-  const a = mediaById.get(id);
-  if (!a) return undefined;
-  if (patch.has_watermark !== undefined) a.has_watermark = patch.has_watermark;
-  if (patch.is_cover !== undefined && a.model_id != null) {
-    const m = modelsById.get(a.model_id);
-    if (m) {
-      if (patch.is_cover) {
-        m.cover_asset_id = id;
-      } else if (m.cover_asset_id === id) {
-        m.cover_asset_id = null;
-      }
-      m.updated_at = new Date();
+  const db = getDb();
+  return await db.transaction(async (tx) => {
+    const cur = await tx.query.mediaAssets.findFirst({ where: eq(mediaAssets.id, id) });
+    if (!cur) return undefined;
+    const set: Partial<typeof mediaAssets.$inferInsert> = {};
+    if (patch.has_watermark !== undefined) set.hasWatermark = patch.has_watermark;
+    let updated: MediaRow = cur;
+    if (Object.keys(set).length > 0) {
+      const [r] = await tx
+        .update(mediaAssets)
+        .set(set)
+        .where(eq(mediaAssets.id, id))
+        .returning();
+      if (r) updated = r;
     }
-  }
-  // alt 字段当前 schema 上没存（图片 alt 留给 Cloudflare Images 那层）；patch 忽略即可。
-  return cloneAdminMedia(a);
+    if (patch.is_cover !== undefined && cur.modelId != null) {
+      if (patch.is_cover) {
+        await tx
+          .update(models)
+          .set({ coverAssetId: id, updatedAt: new Date() })
+          .where(eq(models.id, cur.modelId));
+      } else {
+        // 仅当 model.cover_asset_id 正指向本条时清零
+        await tx
+          .update(models)
+          .set({ coverAssetId: null, updatedAt: new Date() })
+          .where(and(eq(models.id, cur.modelId), eq(models.coverAssetId, id)));
+      }
+    }
+    return toAdminMediaDomain(updated);
+  });
 }
 
 export async function adminDeleteMedia(id: number): Promise<boolean> {
-  const a = mediaById.get(id);
-  if (!a) return false;
-  mediaById.delete(id);
-  mediaByHash.delete(a.hash);
-  // 若有 model 引用本条作 cover，清掉。
-  if (a.model_id != null) {
-    const m = modelsById.get(a.model_id);
-    if (m && m.cover_asset_id === id) {
-      m.cover_asset_id = null;
-      m.updated_at = new Date();
+  const db = getDb();
+  return await db.transaction(async (tx) => {
+    const cur = await tx.query.mediaAssets.findFirst({ where: eq(mediaAssets.id, id) });
+    if (!cur) return false;
+    await tx.delete(mediaAssets).where(eq(mediaAssets.id, id));
+    if (cur.modelId != null) {
+      await tx
+        .update(models)
+        .set({ coverAssetId: null, updatedAt: new Date() })
+        .where(and(eq(models.id, cur.modelId), eq(models.coverAssetId, id)));
     }
-  }
-  return true;
+    return true;
+  });
 }
