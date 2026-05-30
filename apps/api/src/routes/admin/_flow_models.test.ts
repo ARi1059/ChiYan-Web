@@ -84,9 +84,9 @@ function makeRequest(
   return app.request(path, { ...init, headers }, ENV);
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   _resetAdminRepoForTests();
-  _resetModelsRepoForTests();
+  await _resetModelsRepoForTests();
   _resetAuditForTests();
   _resetJtiStoreForTests();
   _resetKeyRingCacheForTests();

@@ -19,7 +19,7 @@ describe("studio-info-repo", () => {
 
   it("_setForTests 覆盖 is_studio_open + resume_at（工作室休息场景）", async () => {
     const resumeAt = new Date("2026-06-01T09:00:00Z");
-    _setForTests({ is_studio_open: false, resume_at: resumeAt });
+    await _setForTests({ is_studio_open: false, resume_at: resumeAt });
     const s = await getSettings();
     expect(s.is_studio_open).toBe(false);
     expect(s.resume_at?.toISOString()).toBe(resumeAt.toISOString());
@@ -35,15 +35,15 @@ describe("studio-info-repo", () => {
   });
 
   it("_resetStudioInfoRepoForTests 恢复默认", async () => {
-    _setForTests({ name: "Custom", qq: "11111111" });
-    _resetStudioInfoRepoForTests();
+    await _setForTests({ name: "Custom", qq: "11111111" });
+    await _resetStudioInfoRepoForTests();
     const s = await getSettings();
     expect(s.name).toBe("ChiYan Studio");
     expect(s.qq).toBe("88888888");
   });
 
   it("business_hours 部分覆盖 + weekends", async () => {
-    _setForTests({
+    await _setForTests({
       business_hours: {
         weekdays: { open: "10:00", close: "20:00" },
         weekends: { open: "12:00", close: "18:00" },

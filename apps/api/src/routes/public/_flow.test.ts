@@ -110,10 +110,10 @@ async function seedModelWithCover(over: Partial<ModelInsert> = {}): Promise<Mode
   );
 }
 
-beforeEach(() => {
-  _resetModelsRepoForTests();
+beforeEach(async () => {
+  await _resetModelsRepoForTests();
   _resetRostersRepoForTests();
-  _resetStudioInfoRepoForTests();
+  await _resetStudioInfoRepoForTests();
   _resetVisitsRepoForTests();
   _resetRateLimitForTests();
 });
@@ -160,7 +160,7 @@ describe("GET /public/today", () => {
   });
 
   it("工作室休息：is_studio_open=false + resume_at；models 允许为空", async () => {
-    _setForTests({
+    await _setForTests({
       is_studio_open: false,
       resume_at: new Date("2026-06-01T09:00:00Z"),
     });

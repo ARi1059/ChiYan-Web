@@ -447,6 +447,9 @@ export async function _resetModelsRepoForTests(): Promise<void> {
   await db.execute(
     sql`TRUNCATE TABLE media_assets, models, admins, daily_rosters RESTART IDENTITY CASCADE`,
   );
+  // sentinel admin (id=1) 在 truncate 后立刻重种 —— adminCreateMedia 等不经过
+  // _insertMediaForTests 的代码路径默认 uploaded_by=1，它们需要这个 FK target 存在。
+  await ensureSentinelAdmin();
 }
 
 // ─── 管理视角 ──────────────────────────────────────────────────────

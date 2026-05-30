@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { _insertForTests as _insertAdminForTests } from "./admin-repo";
 import {
   _insertMediaForTests,
   _insertModelForTests,
@@ -224,7 +225,7 @@ describe("models-repo / findCoverAndGalleryAssets", () => {
 describe("models-repo / reset", () => {
   it("_resetModelsRepoForTests 清空所有", async () => {
     await _insertModelForTests(makeModel({ code: "M-2026-0001" }));
-    _resetModelsRepoForTests();
+    await _resetModelsRepoForTests();
     expect(await findActiveByCode("M-2026-0001")).toBe("not_found");
   });
 });
@@ -376,14 +377,20 @@ describe("models-repo / admin write paths", () => {
   });
 
   it("adminFindMediaById 含 original_url + uploaded_by 全字段", async () => {
+    // 用任意一个真实 admin 作为 uploaded_by —— 用例只关心字段被原样回读。
+    const uploader = await _insertAdminForTests({
+      username: "uploader", display_name: "uploader", role: "admin", status: "active",
+      password_hash: "$2a$12$" + "x".repeat(53), totp_secret_enc: null, totp_enrolled: false,
+      must_change_password: false, failed_login_count: 0, locked_until: null, last_login_at: null,
+    });
     const created = await adminCreateMedia({
       model_id: null, type: "image", url: "u", original_url: "ORIG",
       thumb_url: null, width: 1, height: 1, file_size: 999, hash: "x",
-      has_watermark: false, uploaded_by: 42,
+      has_watermark: false, uploaded_by: uploader.id,
     });
     const got = await adminFindMediaById(created.id);
     expect(got!.original_url).toBe("ORIG");
-    expect(got!.uploaded_by).toBe(42);
+    expect(got!.uploaded_by).toBe(uploader.id);
     expect(got!.file_size).toBe(999);
   });
 });

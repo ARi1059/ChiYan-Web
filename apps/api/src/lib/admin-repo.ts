@@ -11,7 +11,12 @@
  * Phase 1 只用到 owner/admin 的字段子集；保留接口形态，Step 7 直接接 db.query.admins.findFirst 等。
  */
 
+import { sql } from "drizzle-orm";
+import { schema } from "@chiyan/db";
 import type { AdminRole, AdminStatus } from "@chiyan/types";
+import { getDb, hasDb } from "./db";
+
+const { admins } = schema;
 
 export interface AdminRecord {
   id: number;
@@ -69,6 +74,30 @@ export async function _insertForTests(record: Omit<AdminRecord, "id" | "created_
   const full: AdminRecord = { ...record, id, created_at: now, updated_at: now };
   adminsById.set(id, full);
   adminsByUsername.set(full.username, id);
+  // 桥接 drizzle admins 表：admin-repo 仍是 mock，但 media_assets.uploaded_by 是
+  // 真表的 FK。测试种出 admin 时同步在 drizzle 写一行占位，避免 register / upload
+  // 时 FK 撞墙。等 admin-repo 真正切 drizzle（计划 P1）时，这段一并删。
+  if (hasDb()) {
+    await getDb()
+      .insert(admins)
+      .values({
+        id,
+        username: full.username,
+        displayName: full.display_name,
+        role: full.role,
+        status: full.status,
+        passwordHash: full.password_hash,
+        totpSecretEnc: full.totp_secret_enc,
+        totpEnrolled: full.totp_enrolled,
+        mustChangePassword: full.must_change_password,
+        failedLoginCount: full.failed_login_count,
+        lockedUntil: full.locked_until,
+        lastLoginAt: full.last_login_at,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: admins.id });
+  }
   return clone(full);
 }
 
