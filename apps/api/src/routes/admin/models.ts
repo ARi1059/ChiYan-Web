@@ -161,7 +161,9 @@ app.post(
         action: "admin.model.created",
         target_type: "model",
         target_id: String(created.id),
-        payload: { code: created.code, nickname: created.nickname },
+        // 用 model_code 而不是 code —— sanitize.ts 的 deny-list 里 "code" 是 TOTP code 的兜底，
+        // 用 model_code 避免被 mask 成 "***"。
+        payload: { model_code: created.code, nickname: created.nickname },
         ip: c.req.header("CF-Connecting-IP") ?? null,
         ua: c.req.header("User-Agent") ?? null,
       });
@@ -205,7 +207,7 @@ app.patch(
       action: "admin.model.updated",
       target_type: "model",
       target_id: String(updated.id),
-      payload: { code: updated.code, fields: Object.keys(rest) },
+      payload: { model_code: updated.code, fields: Object.keys(rest) },
       ip: c.req.header("CF-Connecting-IP") ?? null,
       ua: c.req.header("User-Agent") ?? null,
     });
@@ -230,7 +232,7 @@ app.delete(
       action: "admin.model.archived",
       target_type: "model",
       target_id: String(archived.id),
-      payload: { code: archived.code },
+      payload: { model_code: archived.code },
       ip: c.req.header("CF-Connecting-IP") ?? null,
       ua: c.req.header("User-Agent") ?? null,
     });
@@ -255,7 +257,7 @@ app.post(
       action: "admin.model.restored",
       target_type: "model",
       target_id: String(restored.id),
-      payload: { code: restored.code },
+      payload: { model_code: restored.code },
       ip: c.req.header("CF-Connecting-IP") ?? null,
       ua: c.req.header("User-Agent") ?? null,
     });

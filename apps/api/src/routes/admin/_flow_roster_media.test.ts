@@ -91,7 +91,7 @@ beforeEach(async () => {
   await _resetModelsRepoForTests();
   await _resetRostersRepoForTests();
   _resetMediaSignForTests();
-  _resetAuditForTests();
+  await _resetAuditForTests();
   _resetJtiStoreForTests();
   _resetKeyRingCacheForTests();
   _resetRateLimitForTests();

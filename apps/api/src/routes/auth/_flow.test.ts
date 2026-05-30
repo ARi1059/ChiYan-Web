@@ -87,7 +87,7 @@ beforeEach(async () => {
   await _resetAdminRepoForTests();
   _resetChallengeStoreForTests();
   _resetJtiStoreForTests();
-  _resetAuditForTests();
+  await _resetAuditForTests();
   _resetTotpSetupStoreForTests();
   _resetKeyRingCacheForTests();
   _resetRateLimitForTests();

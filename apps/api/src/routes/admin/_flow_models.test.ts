@@ -87,7 +87,7 @@ function makeRequest(
 beforeEach(async () => {
   await _resetAdminRepoForTests();
   await _resetModelsRepoForTests();
-  _resetAuditForTests();
+  await _resetAuditForTests();
   _resetJtiStoreForTests();
   _resetKeyRingCacheForTests();
   _resetRateLimitForTests();
@@ -124,7 +124,7 @@ describe("POST /admin/models（创建）", () => {
     expect(body.data.code).toBe("M-2026-0501");
     expect(body.data.real_name).toBe("张三");
     // audit payload 不含 real_name
-    const audits = _getAuditEntriesForTests();
+    const audits = await _getAuditEntriesForTests();
     const created = audits.find((a) => a.action === "admin.model.created");
     expect(created).toBeDefined();
     expect(JSON.stringify(created!.payload)).not.toContain("张三");
@@ -246,7 +246,7 @@ describe("PATCH / DELETE / restore", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { data: { nickname: string } };
     expect(body.data.nickname).toBe("EveX");
-    const audits = _getAuditEntriesForTests();
+    const audits = await _getAuditEntriesForTests();
     expect(audits.some((a) => a.action === "admin.model.updated")).toBe(true);
   });
 
@@ -362,7 +362,7 @@ describe("GET /admin/audit-logs", () => {
       method: "POST", token, csrf: true,
       body: JSON.stringify(modelBody()),
     });
-    const audits = _getAuditEntriesForTests();
+    const audits = await _getAuditEntriesForTests();
     const firstId = audits[0]!.id;
     const hit = await makeRequest(`/api/v1/admin/audit-logs/${firstId}`, {
       token, csrf: true,

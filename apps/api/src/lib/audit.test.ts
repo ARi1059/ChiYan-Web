@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { _insertForTests as _insertAdminForTests, _resetAdminRepoForTests } from "./admin-repo";
+import { ensureSentinelAdmin } from "./sentinel-admin";
 import {
   _resetAuditForTests,
   findAuditById,
@@ -6,11 +8,48 @@ import {
   writeAudit,
 } from "./audit";
 
-beforeEach(() => _resetAuditForTests());
+// 多 admin 测要先种实体（audit.admin_id 是 admins.id 的 FK），用 ADMIN_A / ADMIN_B 拿真 id 写入
+let ADMIN_A: number;
+let ADMIN_B: number;
+
+beforeEach(async () => {
+  await _resetAuditForTests();
+  // sentinel 在 _resetAdminRepoForTests 不重种；audit 测试干净起步，自己装两个 admin
+  await _resetAdminRepoForTests();
+  await ensureSentinelAdmin();
+  const a = await _insertAdminForTests({
+    username: "audit-a",
+    display_name: "A",
+    role: "admin",
+    status: "active",
+    password_hash: "$2a$12$" + "x".repeat(53),
+    totp_secret_enc: null,
+    totp_enrolled: false,
+    must_change_password: false,
+    failed_login_count: 0,
+    locked_until: null,
+    last_login_at: null,
+  });
+  const b = await _insertAdminForTests({
+    username: "audit-b",
+    display_name: "B",
+    role: "admin",
+    status: "active",
+    password_hash: "$2a$12$" + "x".repeat(53),
+    totp_secret_enc: null,
+    totp_enrolled: false,
+    must_change_password: false,
+    failed_login_count: 0,
+    locked_until: null,
+    last_login_at: null,
+  });
+  ADMIN_A = a.id;
+  ADMIN_B = b.id;
+});
 
 async function seed(over: Partial<Parameters<typeof writeAudit>[0]> = {}) {
   await writeAudit({
-    admin_id: 1,
+    admin_id: ADMIN_A,
     action: "admin.model.created",
     target_type: "model",
     target_id: "M-1",
@@ -32,10 +71,10 @@ describe("audit / findAuditLogs", () => {
   });
 
   it("admin_id filter", async () => {
-    await seed({ admin_id: 1, action: "x" });
-    await seed({ admin_id: 2, action: "y" });
-    await seed({ admin_id: 1, action: "z" });
-    const r = await findAuditLogs({ admin_id: 1, page: 1, page_size: 10 });
+    await seed({ admin_id: ADMIN_A, action: "x" });
+    await seed({ admin_id: ADMIN_B, action: "y" });
+    await seed({ admin_id: ADMIN_A, action: "z" });
+    const r = await findAuditLogs({ admin_id: ADMIN_A, page: 1, page_size: 10 });
     expect(r.total).toBe(2);
     expect(r.items.map((i) => i.action)).toEqual(["z", "x"]);
   });

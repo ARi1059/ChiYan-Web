@@ -13,32 +13,25 @@ import { admin as adminTypes } from "@chiyan/types";
 import { z } from "zod";
 import type { AppContext } from "../../env";
 import { fail, ok } from "../../lib/api";
-import { findAuditById, findAuditLogs, type AuditRow } from "../../lib/audit";
-import { csrf } from "../../middleware/csrf";
+import { findAuditById, findAuditLogs, type AuditRowWithAdmin } from "../../lib/audit";
 import { fullyOnboarded } from "../../middleware/fully-onboarded";
 import { roleRequired } from "../../middleware/role-required";
 
 const app = new Hono<AppContext>();
 
-app.use("*", fullyOnboarded, csrf, roleRequired("owner", "admin"));
+// audit-logs 只有 GET，挂 csrf 没意义还会卡读路径；只校验 onboard + 角色。
+app.use("*", fullyOnboarded, roleRequired("owner", "admin"));
 
 const IdParam = z.object({ id: z.coerce.number().int().positive() });
 
-function serialize(row: AuditRow): Record<string, unknown> {
-  // 接口 schema：target_id 是 number | null。ring 存的是 string；
-  // 数字可转就转，否则 null（避免破坏前端类型）。
-  let target_id: number | null = null;
-  if (row.target_id != null) {
-    const n = Number(row.target_id);
-    target_id = Number.isInteger(n) ? n : null;
-  }
+function serialize(row: AuditRowWithAdmin): Record<string, unknown> {
   return {
     id: row.id,
     admin_id: row.admin_id,
-    admin_username: null, // mock 阶段不 join admins；Step 7 真 DB 再 join
+    admin_username: row.admin_username,
     action: row.action,
     target_type: row.target_type,
-    target_id,
+    target_id: row.target_id,
     payload: row.payload,
     ip: row.ip,
     user_agent: row.ua,

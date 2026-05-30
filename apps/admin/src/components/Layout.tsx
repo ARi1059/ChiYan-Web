@@ -7,12 +7,13 @@
  *  - 导航项激活态用 NavLink active class
  */
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LogOut, Users, ListChecks, Settings } from "lucide-react";
+import { LogOut, Users, ListChecks, Settings, FileClock } from "lucide-react";
 import { useAuth } from "../store/AuthContext";
 
 const NAV = [
   { to: "/models", label: "模特管理", icon: Users },
   { to: "/roster", label: "今日名单", icon: ListChecks },
+  { to: "/audit-logs", label: "审计日志", icon: FileClock },
   { to: "/settings", label: "工作室设置", icon: Settings },
 ];
 

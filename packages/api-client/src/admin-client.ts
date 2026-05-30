@@ -293,6 +293,58 @@ export function deleteAdminMedia(id: number, accessToken: string): Promise<{ del
   return authedDelete<{ deleted: true }>(`/admin/media/${id}`, accessToken);
 }
 
+// ─── 审计日志（GET /admin/audit-logs，owner+admin 可见） ──────────────
+
+export interface AdminAuditLog {
+  id: number;
+  admin_id: number | null;
+  admin_username: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: number | null;
+  payload: Record<string, unknown> | null;
+  ip: string | null;
+  user_agent: string | null;
+  created_at: string;
+}
+
+export interface AdminAuditLogsListResponse {
+  items: AdminAuditLog[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface ListAdminAuditLogsQuery {
+  admin_id?: number;
+  action?: string;
+  target_type?: string;
+  /** ISO 8601 datetime；UTC */
+  from?: string;
+  to?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export function listAdminAuditLogs(
+  q: ListAdminAuditLogsQuery,
+  accessToken: string,
+): Promise<AdminAuditLogsListResponse> {
+  const qs = new URLSearchParams();
+  if (q.admin_id !== undefined) qs.set("admin_id", String(q.admin_id));
+  if (q.action !== undefined) qs.set("action", q.action);
+  if (q.target_type !== undefined) qs.set("target_type", q.target_type);
+  if (q.from !== undefined) qs.set("from", q.from);
+  if (q.to !== undefined) qs.set("to", q.to);
+  if (q.page !== undefined) qs.set("page", String(q.page));
+  if (q.page_size !== undefined) qs.set("page_size", String(q.page_size));
+  const tail = qs.toString();
+  return authedGet<AdminAuditLogsListResponse>(
+    `/admin/audit-logs${tail ? `?${tail}` : ""}`,
+    accessToken,
+  );
+}
+
 // ─── studio-settings PATCH ────────────────────────────────────────
 
 export interface StudioSettingsPatch {

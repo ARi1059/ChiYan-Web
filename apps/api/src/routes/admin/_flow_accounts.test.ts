@@ -90,7 +90,7 @@ function makeRequest(
 beforeEach(async () => {
   await _resetAdminRepoForTests();
   await _resetModelsRepoForTests();
-  _resetAuditForTests();
+  await _resetAuditForTests();
   _resetJtiStoreForTests();
   _resetKeyRingCacheForTests();
   _resetRateLimitForTests();
@@ -130,7 +130,7 @@ describe("POST /admin/accounts 新建", () => {
     });
     const body = (await res.json()) as { data: { one_time_password: string } };
     const oneTime = body.data.one_time_password;
-    const audits = _getAuditEntriesForTests();
+    const audits = await _getAuditEntriesForTests();
     const created = audits.find((a) => a.action === "admin.account.created");
     expect(created).toBeDefined();
     expect(JSON.stringify(created!.payload)).not.toContain(oneTime);
@@ -200,7 +200,7 @@ describe("PATCH /admin/accounts/:id", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { data: { display_name: string } };
     expect(body.data.display_name).toBe("改名了");
-    const audits = _getAuditEntriesForTests();
+    const audits = await _getAuditEntriesForTests();
     expect(audits.some((a) => a.action === "admin.account.updated")).toBe(true);
   });
 
