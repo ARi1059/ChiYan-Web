@@ -26,6 +26,20 @@ const ImageAsset = z.object({
 });
 export type ImageAsset = z.infer<typeof ImageAsset>;
 
+/**
+ * 前端展示开关。Admin 在 SettingsTab 配置，H5 ModelCard / DetailSheet 读取。
+ * 与 packages/db/src/schema/studio-settings.ts 的 DisplayConfigValue 一一对应。
+ */
+export const DisplayConfig = z.object({
+  showBust: z.boolean(),
+  showAge: z.boolean(),
+  showDistrict: z.boolean(),
+  showStyles: z.boolean(),
+  showDescription: z.boolean(),
+  showQQNumber: z.boolean(),
+});
+export type DisplayConfig = z.infer<typeof DisplayConfig>;
+
 /** 公开卡片字段（首页 + 全部模特库共用，详情见 H5 §四.三.4）。 */
 export const PublicModelCard = z.object({
   code: ModelCode,
@@ -38,7 +52,10 @@ export const PublicModelCard = z.object({
   hip: z.number().int().optional(),
   shoe_size_eu: z.number().int().optional(),
   age_range: z.string().optional(),
+  age: z.number().int().optional(),
   city: z.string().optional(),
+  district: z.string().optional(),
+  qq: z.string().optional(),
   style_tags: z.array(z.string()),
   available_types: z.array(z.string()),
   can_remote: z.boolean(),
@@ -119,9 +136,13 @@ export const PublicStudioInfoResponse = z.object({
   tagline: z.string().optional(),
   address: z.string().optional(),
   qq: z.string(),
+  qq_group: z.string().optional(),
   phone: z.string().optional(),
   business_hours: BusinessHours,
   about: z.string().optional(),
+  home_notice: z.string().optional(),
+  notice_enabled: z.boolean(),
+  display_config: DisplayConfig,
 });
 export type PublicStudioInfoResponse = z.infer<typeof PublicStudioInfoResponse>;
 

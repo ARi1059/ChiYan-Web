@@ -14,6 +14,7 @@ import {
   modelStatusValues,
   scheduleStatusValues,
 } from "./enums";
+import { BusinessHours, DisplayConfig } from "./public";
 
 const ModelCode = z.string().regex(/^M-\d{4}-\d{4}$/);
 const IsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -57,8 +58,11 @@ export const AdminModelDetail = z.object({
   hip: z.number().int().optional(),
   shoe_size_eu: z.number().int().optional(),
   age_range: z.string().optional(),
+  age: z.number().int().optional(),
   hometown: z.string().optional(),
   city: z.string().optional(),
+  district: z.string().optional(),
+  qq: z.string().optional(),
   style_tags: z.array(z.string()),
   available_types: z.array(z.string()),
   can_remote: z.boolean(),
@@ -87,8 +91,11 @@ export const AdminCreateModelRequest = AdminModelDetail.omit({
   hip: true,
   shoe_size_eu: true,
   age_range: true,
+  age: true,
   hometown: true,
   city: true,
+  district: true,
+  qq: true,
   cover_asset_id: true,
 });
 export type AdminCreateModelRequest = z.infer<typeof AdminCreateModelRequest>;
@@ -121,6 +128,54 @@ export const AdminModelsListResponse = z.object({
   page_size: z.number().int(),
 });
 export type AdminModelsListResponse = z.infer<typeof AdminModelsListResponse>;
+
+// ═══════════════════════════════════════════════════════════════
+// §4.9 工作室设置（Admin SettingsTab）
+// ═══════════════════════════════════════════════════════════════
+
+export const AdminStudioSettings = z.object({
+  name: z.string(),
+  tagline: z.string().nullable(),
+  address: z.string().nullable(),
+  qq: z.string(),
+  qq_group: z.string().nullable(),
+  phone: z.string().nullable(),
+  business_hours: BusinessHours,
+  about: z.string().nullable(),
+  home_notice: z.string().nullable(),
+  notice_enabled: z.boolean(),
+  display_config: DisplayConfig,
+  is_studio_open: z.boolean(),
+  resume_at: z.string().datetime().nullable(),
+  updated_at: z.string().datetime(),
+});
+export type AdminStudioSettings = z.infer<typeof AdminStudioSettings>;
+
+/**
+ * PATCH /admin/studio-settings 请求体。
+ *
+ * - 全部字段可省（partial）
+ * - display_config 是子部分（admin 可以只切一个 showBust，server 端合并已有）
+ * - tagline / address / qq_group / phone / about / home_notice / resume_at 可传 null 显式清空
+ */
+export const AdminUpdateStudioSettingsRequest = z.object({
+  name: z.string().min(1).max(64).optional(),
+  tagline: z.string().max(128).nullable().optional(),
+  address: z.string().max(255).nullable().optional(),
+  qq: z.string().min(1).max(32).optional(),
+  qq_group: z.string().max(32).nullable().optional(),
+  phone: z.string().max(32).nullable().optional(),
+  business_hours: BusinessHours.optional(),
+  about: z.string().nullable().optional(),
+  home_notice: z.string().nullable().optional(),
+  notice_enabled: z.boolean().optional(),
+  display_config: DisplayConfig.partial().optional(),
+  is_studio_open: z.boolean().optional(),
+  resume_at: z.string().datetime().nullable().optional(),
+});
+export type AdminUpdateStudioSettingsRequest = z.infer<
+  typeof AdminUpdateStudioSettingsRequest
+>;
 
 // ═══════════════════════════════════════════════════════════════
 // §4.4 当日名单
