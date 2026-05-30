@@ -13,11 +13,18 @@
  */
 import "dotenv/config";
 import { serve } from "@hono/node-server";
+import { createDb } from "@chiyan/db";
 import app from "./index";
 import { loadEnv } from "./env";
+import { setDb } from "./lib/db";
+import { ensureStudioSettingsSeed } from "./lib/studio-info-repo";
 
 const env = loadEnv(process.env);
 const port = env.PORT ? Number(env.PORT) : 3000;
+
+const db = createDb(env.DATABASE_URL);
+setDb(db);
+await ensureStudioSettingsSeed();
 
 serve(
   {

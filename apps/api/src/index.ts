@@ -20,6 +20,7 @@ import { requestId } from "./middleware/request-id";
 import { securityHeaders } from "./middleware/security-headers";
 import adminRoutes from "./routes/admin";
 import authRoutes from "./routes/auth";
+import mediaStatic from "./routes/media-static";
 import publicRoutes from "./routes/public";
 
 const app = new Hono<AppContext>();
@@ -40,6 +41,7 @@ app.get("/health", (c) =>
 app.route("/api/v1/auth", authRoutes);
 app.route("/api/v1/admin", adminRoutes);
 app.route("/api/v1/public", publicRoutes);
+app.route("/media", mediaStatic);
 
 app.notFound((c) => {
   applyCorsToError(c);
