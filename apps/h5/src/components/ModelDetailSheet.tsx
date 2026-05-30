@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { Drawer } from "vaul";
-import { X, MessageCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, MessageCircle, ChevronLeft, ChevronRight, Share2 } from "lucide-react";
 import { cn } from "./ui/utils";
 import { useApp } from "../store/AppContext";
 import { useToast } from "./ToastProvider";
 import { WechatHintSheet } from "./WechatHintSheet";
+import { ShareSheet } from "./ShareSheet";
 import {
   buildOrderMessage,
   checkRateLimit,
   copyAndContactQQ,
   detectQQContext,
 } from "../lib/qq";
+import { attemptShare, type ShareIntent } from "../lib/share";
 import type { Model } from "../data/models";
 
 interface ModelDetailSheetProps {
@@ -32,6 +34,35 @@ export function ModelDetailSheet({ model, onClose }: ModelDetailSheetProps) {
   const toast = useToast();
   const [photoIndex, setPhotoIndex] = useState(0);
   const [wechatHintOpen, setWechatHintOpen] = useState(false);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const [shareIntent, setShareIntent] = useState<ShareIntent | null>(null);
+
+  /**
+   * 分享：先尝试 navigator.share（iOS 系统分享面板 / 新 Android Chrome 系统盘）；
+   * 失败 / 被微信内嵌挡住 → ShareSheet 兜底（复制链接 + 微信粘贴提示 + QQ 跳浏览器）。
+   *
+   * 必须同步路径触发 attemptShare（user gesture 跨 await 会失效）。
+   */
+  const handleShare = async () => {
+    if (!model) return;
+    const url = typeof window === "undefined"
+      ? ""
+      : model.code
+        ? `${window.location.origin}/today?m=${encodeURIComponent(model.code)}`
+        : window.location.href;
+    const intent: ShareIntent = {
+      title: `${model.alias} · ${settings.agencyName}`,
+      text: `${model.alias} 当日通告 · ${settings.agencyName}`,
+      url,
+    };
+    setShareIntent(intent);
+    const result = await attemptShare(intent);
+    if (result === "shared") {
+      toast.show("已分享", { tone: "success" });
+      return;
+    }
+    setShareSheetOpen(true);
+  };
 
   /**
    * QQ 接单：必须在 user gesture 同步路径里调用 ——
@@ -102,12 +133,22 @@ export function ModelDetailSheet({ model, onClose }: ModelDetailSheetProps) {
               >
                 {model.alias}
               </h2>
-              <button
-                onClick={onClose}
-                className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center"
-              >
-                <X className="w-4 h-4 text-muted-foreground" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleShare}
+                  className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center"
+                  aria-label="分享"
+                >
+                  <Share2 className="w-4 h-4 text-muted-foreground" />
+                </button>
+                <button
+                  onClick={onClose}
+                  className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center"
+                  aria-label="关闭"
+                >
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
             </div>
 
             <div className="overflow-y-auto flex-1">
@@ -218,6 +259,12 @@ export function ModelDetailSheet({ model, onClose }: ModelDetailSheetProps) {
       </Drawer.Root>
 
       <WechatHintSheet open={wechatHintOpen} onClose={() => setWechatHintOpen(false)} />
+      <ShareSheet
+        open={shareSheetOpen}
+        intent={shareIntent}
+        onClose={() => setShareSheetOpen(false)}
+        onCopied={() => toast.show("链接已复制", { tone: "success" })}
+      />
     </>
   );
 }
