@@ -5,6 +5,7 @@
  *   /login        → LoginPage（账密 → TOTP 两步）
  *   /models       → 模特列表（默认进站）
  *   /roster       → 今日名单
+ *   /schedule     → 档期日历（模特 × 日期网格）
  *   /audit-logs   → 审计日志（owner / admin 可见，operator 看到也会被 API 403）
  *   /settings     → 工作室设置
  *
@@ -18,6 +19,7 @@ import { AuditLogsPage } from "./pages/AuditLogsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ModelsPage } from "./pages/ModelsPage";
 import { RosterPage } from "./pages/RosterPage";
+import { SchedulePage } from "./pages/SchedulePage";
 import { SettingsPage } from "./pages/SettingsPage";
 
 export function App() {
@@ -34,6 +36,7 @@ export function App() {
         <Route path="/" element={<Navigate to="/models" replace />} />
         <Route path="/models" element={<ModelsPage />} />
         <Route path="/roster" element={<RosterPage />} />
+        <Route path="/schedule" element={<SchedulePage />} />
         <Route path="/audit-logs" element={<AuditLogsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

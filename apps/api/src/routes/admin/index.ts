@@ -13,6 +13,7 @@ import auditLogs from "./audit-logs";
 import media from "./media";
 import models from "./models";
 import roster from "./roster";
+import schedule from "./schedule";
 import studioSettings from "./studio-settings";
 
 const admin = new Hono<AppContext>();
@@ -29,8 +30,6 @@ admin.route("/roster", roster);
 admin.route("/media", media);
 admin.route("/audit-logs", auditLogs);
 admin.route("/studio-settings", studioSettings);
-
-// TODO: Phase 3
-// admin.route("/schedule", schedule);
+admin.route("/schedule", schedule);
 
 export default admin;

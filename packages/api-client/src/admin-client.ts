@@ -266,10 +266,7 @@ export function listAdminMedia(
   if (query.page !== undefined) qs.set("page", String(query.page));
   if (query.page_size !== undefined) qs.set("page_size", String(query.page_size));
   const tail = qs.toString();
-  return authedGet<AdminMediaListResponse>(
-    `/admin/media${tail ? `?${tail}` : ""}`,
-    accessToken,
-  );
+  return authedGet<AdminMediaListResponse>(`/admin/media${tail ? `?${tail}` : ""}`, accessToken);
 }
 
 export interface PatchAdminMediaInput {
@@ -345,6 +342,70 @@ export function listAdminAuditLogs(
   );
 }
 
+// ─── 档期 schedule（接口方案 §4.10） ──────────────────────────────
+
+export type AdminScheduleStatus = "available" | "booked" | "tentative";
+
+export interface AdminScheduleEntry {
+  id: number;
+  model_id: number;
+  date: string; // YYYY-MM-DD
+  status: AdminScheduleStatus;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminScheduleRangeResponse {
+  from: string;
+  to: string;
+  items: AdminScheduleEntry[];
+}
+
+export interface ListAdminScheduleQuery {
+  from: string;
+  to: string;
+  model_id?: number;
+}
+
+export function listAdminSchedule(
+  q: ListAdminScheduleQuery,
+  accessToken: string,
+): Promise<AdminScheduleRangeResponse> {
+  const qs = new URLSearchParams({ from: q.from, to: q.to });
+  if (q.model_id !== undefined) qs.set("model_id", String(q.model_id));
+  return authedGet<AdminScheduleRangeResponse>(`/admin/schedule?${qs.toString()}`, accessToken);
+}
+
+export interface UpsertAdminScheduleInput {
+  model_id: number;
+  date: string;
+  status: AdminScheduleStatus;
+  note?: string | null;
+}
+
+export function upsertAdminSchedule(
+  input: UpsertAdminScheduleInput,
+  accessToken: string,
+): Promise<AdminScheduleEntry> {
+  return authedPut<UpsertAdminScheduleInput, AdminScheduleEntry>(
+    "/admin/schedule",
+    input,
+    accessToken,
+  );
+}
+
+export function deleteAdminSchedule(
+  model_id: number,
+  date: string,
+  accessToken: string,
+): Promise<{ deleted: true }> {
+  return authedDelete<{ deleted: true }>(
+    `/admin/schedule/${model_id}/${encodeURIComponent(date)}`,
+    accessToken,
+  );
+}
+
 // ─── studio-settings PATCH ────────────────────────────────────────
 
 export interface StudioSettingsPatch {
@@ -402,11 +463,7 @@ async function authedDelete<TRes>(path: string, accessToken: string): Promise<TR
   return env.data;
 }
 
-async function authedPut<TReq, TRes>(
-  path: string,
-  body: TReq,
-  accessToken: string,
-): Promise<TRes> {
+async function authedPut<TReq, TRes>(path: string, body: TReq, accessToken: string): Promise<TRes> {
   const csrf = readCsrfToken();
   if (!csrf) throw new AdminApiError(40301, "CSRF cookie 缺失，请重新登录");
   const res = await fetch(`${API_BASE}${path}`, {
@@ -522,10 +579,7 @@ export function patchAdminModel(
   );
 }
 
-export function archiveAdminModel(
-  id: number,
-  accessToken: string,
-): Promise<{ archived: true }> {
+export function archiveAdminModel(id: number, accessToken: string): Promise<{ archived: true }> {
   return authedDelete<{ archived: true }>(`/admin/models/${id}`, accessToken);
 }
 
@@ -552,10 +606,7 @@ export function putAdminRoster(
   accessToken: string,
   note?: string,
 ): Promise<AdminRosterResponse> {
-  return authedPut<
-    { date: string; model_ids: number[]; note?: string },
-    AdminRosterResponse
-  >(
+  return authedPut<{ date: string; model_ids: number[]; note?: string }, AdminRosterResponse>(
     "/admin/roster",
     { date, model_ids, ...(note !== undefined ? { note } : {}) },
     accessToken,

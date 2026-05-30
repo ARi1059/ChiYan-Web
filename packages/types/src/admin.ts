@@ -173,9 +173,7 @@ export const AdminUpdateStudioSettingsRequest = z.object({
   is_studio_open: z.boolean().optional(),
   resume_at: z.string().datetime().nullable().optional(),
 });
-export type AdminUpdateStudioSettingsRequest = z.infer<
-  typeof AdminUpdateStudioSettingsRequest
->;
+export type AdminUpdateStudioSettingsRequest = z.infer<typeof AdminUpdateStudioSettingsRequest>;
 
 // ═══════════════════════════════════════════════════════════════
 // §4.4 当日名单
@@ -307,6 +305,42 @@ export const AdminScheduleResponse = z.object({
   entries: z.array(ScheduleSlot),
 });
 export type AdminScheduleResponse = z.infer<typeof AdminScheduleResponse>;
+
+// 全模特按日期范围聚合 —— SchedulePage 网格视图用
+export const AdminScheduleRangeQuery = z.object({
+  from: IsoDate,
+  to: IsoDate,
+  /** 可选过滤；不传返所有 active 模特的档期 */
+  model_id: z.coerce.number().int().optional(),
+});
+export type AdminScheduleRangeQuery = z.infer<typeof AdminScheduleRangeQuery>;
+
+export const AdminScheduleEntry = z.object({
+  id: z.number().int(),
+  model_id: z.number().int(),
+  date: IsoDate,
+  status: z.enum(scheduleStatusValues),
+  note: z.string().nullable(),
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+});
+export type AdminScheduleEntry = z.infer<typeof AdminScheduleEntry>;
+
+export const AdminScheduleRangeResponse = z.object({
+  from: IsoDate,
+  to: IsoDate,
+  items: z.array(AdminScheduleEntry),
+});
+export type AdminScheduleRangeResponse = z.infer<typeof AdminScheduleRangeResponse>;
+
+// 单条 upsert（PUT） —— 不走"整覆盖一段时间"语义
+export const AdminScheduleUpsertRequest = z.object({
+  model_id: z.number().int(),
+  date: IsoDate,
+  status: z.enum(scheduleStatusValues),
+  note: z.string().max(200).nullable().optional(),
+});
+export type AdminScheduleUpsertRequest = z.infer<typeof AdminScheduleUpsertRequest>;
 
 // ═══════════════════════════════════════════════════════════════
 // §4.7 账号管理（Owner-only）
