@@ -11,6 +11,7 @@
  * 路径产生即可。
  */
 
+import { sql } from "drizzle-orm";
 import { schema } from "@chiyan/db";
 import { getDb } from "./db";
 
@@ -32,4 +33,9 @@ export async function ensureSentinelAdmin(): Promise<void> {
       status: "active",
     })
     .onConflictDoNothing({ target: admins.id });
+  // 显式 id=1 不自动 bump bigserial 序列；下一次 RESTART IDENTITY 后没有这一步，
+  // 之后的 createAdmin / _insertForTests 会再分配 id=1 撞 pkey。把序列推到 max(id)+1。
+  await db.execute(
+    sql`SELECT setval(pg_get_serial_sequence('admins','id'), GREATEST(1, (SELECT MAX(id) FROM admins)))`,
+  );
 }

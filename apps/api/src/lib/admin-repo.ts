@@ -1,22 +1,25 @@
 /**
- * admins 仓储接口（async，对齐 Drizzle 用法）。
+ * admins 仓储 — drizzle/node-postgres 实现。
  *
- * Phase 1 mock：in-memory Map 模拟一张表。Step 7 切真 Drizzle 时只换实现，不动 handler。
- *
- * 字段保持与 schema/admins.ts 一致：
- *   - password_hash：bcrypt
- *   - totp_secret_enc：AES-256-GCM 加密的 base32 secret（落 bytea；mock 这里直接 Uint8Array）
+ * 字段：与 schema/admins.ts 一一对应。
+ *   - password_hash：bcrypt（caller 算好传进来）
+ *   - totp_secret_enc：AES-256-GCM 密文（Uint8Array <-> bytea；schema/_shared.ts 定义的 custom type）
  *   - must_change_password / totp_enrolled / failed_login_count / locked_until / status
  *
- * Phase 1 只用到 owner/admin 的字段子集；保留接口形态，Step 7 直接接 db.query.admins.findFirst 等。
+ * 密码历史：表 admin_password_history，每次改密 insert 一行；validate 时查 desc 最近 N 条。
+ *
+ * 错误：username 唯一冲突映射 AdminRepoConflictError（pg 23505 + 约束名 admins_username_uniq）。
+ *
+ * 重置：_resetAdminRepoForTests TRUNCATE 两张表 RESTART IDENTITY CASCADE + 重种 sentinel。
+ * 与 _resetModelsRepoForTests 的 admins TRUNCATE 兼容；两个 reset 谁先谁后都不冲突。
  */
 
-import { sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { schema } from "@chiyan/db";
 import type { AdminRole, AdminStatus } from "@chiyan/types";
-import { getDb, hasDb } from "./db";
+import { getDb } from "./db";
 
-const { admins } = schema;
+const { admins, adminPasswordHistory } = schema;
 
 export interface AdminRecord {
   id: number;
@@ -42,26 +45,47 @@ export interface PasswordHistoryRecord {
   created_at: Date;
 }
 
-const adminsById = new Map<number, AdminRecord>();
-const adminsByUsername = new Map<string, number>();
-const passwordHistory: PasswordHistoryRecord[] = [];
-let nextAdminId = 1;
-let nextHistoryId = 1;
+type AdminRow = typeof admins.$inferSelect;
+type HistoryRow = typeof adminPasswordHistory.$inferSelect;
 
-function clone(a: AdminRecord): AdminRecord {
-  return { ...a };
+function toDomain(r: AdminRow): AdminRecord {
+  return {
+    id: r.id,
+    username: r.username,
+    display_name: r.displayName,
+    role: r.role,
+    status: r.status,
+    password_hash: r.passwordHash,
+    totp_secret_enc: r.totpSecretEnc,
+    totp_enrolled: r.totpEnrolled,
+    must_change_password: r.mustChangePassword,
+    failed_login_count: r.failedLoginCount,
+    locked_until: r.lockedUntil,
+    last_login_at: r.lastLoginAt,
+    created_at: r.createdAt,
+    updated_at: r.updatedAt,
+  };
+}
+
+function historyToDomain(r: HistoryRow): PasswordHistoryRecord {
+  return {
+    id: r.id,
+    admin_id: r.adminId,
+    password_hash: r.passwordHash,
+    created_at: r.createdAt,
+  };
 }
 
 export async function findByUsername(username: string): Promise<AdminRecord | undefined> {
-  const id = adminsByUsername.get(username);
-  if (id == null) return undefined;
-  const r = adminsById.get(id);
-  return r ? clone(r) : undefined;
+  const db = getDb();
+  const r = await db.query.admins.findFirst({ where: eq(admins.username, username) });
+  return r ? toDomain(r) : undefined;
 }
 
 export async function findById(id: number): Promise<AdminRecord | undefined> {
-  const r = adminsById.get(id);
-  return r ? clone(r) : undefined;
+  const db = getDb();
+  const r = await db.query.admins.findFirst({ where: eq(admins.id, id) });
+  return r ? toDomain(r) : undefined;
 }
 
 /**
@@ -69,110 +93,114 @@ export async function findById(id: number): Promise<AdminRecord | undefined> {
  * handler 不该直接调它（管理员创建走 /admin/accounts 流程，那里会调 createAdmin）。
  */
 export async function _insertForTests(record: Omit<AdminRecord, "id" | "created_at" | "updated_at">): Promise<AdminRecord> {
-  const id = nextAdminId++;
-  const now = new Date();
-  const full: AdminRecord = { ...record, id, created_at: now, updated_at: now };
-  adminsById.set(id, full);
-  adminsByUsername.set(full.username, id);
-  // 桥接 drizzle admins 表：admin-repo 仍是 mock，但 media_assets.uploaded_by 是
-  // 真表的 FK。测试种出 admin 时同步在 drizzle 写一行占位，避免 register / upload
-  // 时 FK 撞墙。等 admin-repo 真正切 drizzle（计划 P1）时，这段一并删。
-  if (hasDb()) {
-    await getDb()
-      .insert(admins)
-      .values({
-        id,
-        username: full.username,
-        displayName: full.display_name,
-        role: full.role,
-        status: full.status,
-        passwordHash: full.password_hash,
-        totpSecretEnc: full.totp_secret_enc,
-        totpEnrolled: full.totp_enrolled,
-        mustChangePassword: full.must_change_password,
-        failedLoginCount: full.failed_login_count,
-        lockedUntil: full.locked_until,
-        lastLoginAt: full.last_login_at,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoNothing({ target: admins.id });
-  }
-  return clone(full);
+  const db = getDb();
+  const [row] = await db
+    .insert(admins)
+    .values({
+      username: record.username,
+      displayName: record.display_name,
+      role: record.role,
+      status: record.status,
+      passwordHash: record.password_hash,
+      totpSecretEnc: record.totp_secret_enc,
+      totpEnrolled: record.totp_enrolled,
+      mustChangePassword: record.must_change_password,
+      failedLoginCount: record.failed_login_count,
+      lockedUntil: record.locked_until,
+      lastLoginAt: record.last_login_at,
+    })
+    .returning();
+  return toDomain(row!);
 }
 
 export async function incrementFailedLogin(id: number): Promise<number> {
-  const r = adminsById.get(id);
-  if (!r) throw new Error(`admin ${id} not found`);
-  r.failed_login_count += 1;
-  r.updated_at = new Date();
-  return r.failed_login_count;
+  const db = getDb();
+  const [row] = await db
+    .update(admins)
+    .set({
+      failedLoginCount: sql`${admins.failedLoginCount} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(eq(admins.id, id))
+    .returning({ failedLoginCount: admins.failedLoginCount });
+  if (!row) throw new Error(`admin ${id} not found`);
+  return row.failedLoginCount;
 }
 
 export async function lockAccount(id: number, until: Date): Promise<void> {
-  const r = adminsById.get(id);
-  if (!r) throw new Error(`admin ${id} not found`);
-  r.locked_until = until;
-  r.failed_login_count = 0;
-  r.updated_at = new Date();
+  const db = getDb();
+  const out = await db
+    .update(admins)
+    .set({ lockedUntil: until, failedLoginCount: 0, updatedAt: new Date() })
+    .where(eq(admins.id, id))
+    .returning({ id: admins.id });
+  if (out.length === 0) throw new Error(`admin ${id} not found`);
 }
 
 export async function unlockAccount(id: number): Promise<void> {
-  const r = adminsById.get(id);
-  if (!r) throw new Error(`admin ${id} not found`);
-  r.locked_until = null;
-  r.failed_login_count = 0;
-  r.updated_at = new Date();
+  const db = getDb();
+  const out = await db
+    .update(admins)
+    .set({ lockedUntil: null, failedLoginCount: 0, updatedAt: new Date() })
+    .where(eq(admins.id, id))
+    .returning({ id: admins.id });
+  if (out.length === 0) throw new Error(`admin ${id} not found`);
 }
 
 export async function markLoginSuccess(id: number): Promise<void> {
-  const r = adminsById.get(id);
-  if (!r) throw new Error(`admin ${id} not found`);
-  r.failed_login_count = 0;
-  r.locked_until = null;
-  r.last_login_at = new Date();
-  r.updated_at = new Date();
+  const db = getDb();
+  const now = new Date();
+  const out = await db
+    .update(admins)
+    .set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: now, updatedAt: now })
+    .where(eq(admins.id, id))
+    .returning({ id: admins.id });
+  if (out.length === 0) throw new Error(`admin ${id} not found`);
 }
 
 export async function updatePassword(id: number, passwordHash: string): Promise<void> {
-  const r = adminsById.get(id);
-  if (!r) throw new Error(`admin ${id} not found`);
-  r.password_hash = passwordHash;
-  r.must_change_password = false;
-  r.updated_at = new Date();
+  const db = getDb();
+  const out = await db
+    .update(admins)
+    .set({ passwordHash, mustChangePassword: false, updatedAt: new Date() })
+    .where(eq(admins.id, id))
+    .returning({ id: admins.id });
+  if (out.length === 0) throw new Error(`admin ${id} not found`);
 }
 
 export async function recordPasswordHistory(adminId: number, passwordHash: string): Promise<void> {
-  passwordHistory.push({
-    id: nextHistoryId++,
-    admin_id: adminId,
-    password_hash: passwordHash,
-    created_at: new Date(),
-  });
+  const db = getDb();
+  await db.insert(adminPasswordHistory).values({ adminId, passwordHash });
 }
 
 export async function getPasswordHistory(adminId: number, limit: number): Promise<PasswordHistoryRecord[]> {
-  return passwordHistory
-    .filter((r) => r.admin_id === adminId)
-    .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
-    .slice(0, limit)
-    .map((r) => ({ ...r }));
+  const db = getDb();
+  const rows = await db.query.adminPasswordHistory.findMany({
+    where: eq(adminPasswordHistory.adminId, adminId),
+    orderBy: [desc(adminPasswordHistory.createdAt), desc(adminPasswordHistory.id)],
+    limit,
+  });
+  return rows.map(historyToDomain);
 }
 
 export async function enrollTotp(id: number, secretEnc: Uint8Array): Promise<void> {
-  const r = adminsById.get(id);
-  if (!r) throw new Error(`admin ${id} not found`);
-  r.totp_secret_enc = secretEnc;
-  r.totp_enrolled = true;
-  r.updated_at = new Date();
+  const db = getDb();
+  const out = await db
+    .update(admins)
+    .set({ totpSecretEnc: secretEnc, totpEnrolled: true, updatedAt: new Date() })
+    .where(eq(admins.id, id))
+    .returning({ id: admins.id });
+  if (out.length === 0) throw new Error(`admin ${id} not found`);
 }
 
-export function _resetAdminRepoForTests(): void {
-  adminsById.clear();
-  adminsByUsername.clear();
-  passwordHistory.length = 0;
-  nextAdminId = 1;
-  nextHistoryId = 1;
+export async function _resetAdminRepoForTests(): Promise<void> {
+  const db = getDb();
+  // CASCADE：清 admins 时会一并清掉引用它的 password_history / media_assets 等。
+  // 不在此处 ensureSentinelAdmin：admin-repo 单元测试要从空表起算总数。
+  // 同时调 _resetModelsRepoForTests / _resetRostersRepoForTests 的用例会拿到 sentinel。
+  await db.execute(
+    sql`TRUNCATE TABLE admins, admin_password_history RESTART IDENTITY CASCADE`,
+  );
 }
 
 // ─── 账号管理（§4.7 Owner-only） ──────────────────────────────────────────────
@@ -185,11 +213,18 @@ export interface ListAccountsOpts {
 export async function listAccounts(
   opts: ListAccountsOpts,
 ): Promise<{ items: AdminRecord[]; total: number }> {
-  const all = Array.from(adminsById.values()).sort((a, b) => a.id - b.id);
-  const total = all.length;
-  const start = (opts.page - 1) * opts.page_size;
-  const items = all.slice(start, start + opts.page_size).map(clone);
-  return { items, total };
+  const db = getDb();
+  const offset = (opts.page - 1) * opts.page_size;
+  const [items, totalRow] = await Promise.all([
+    db.query.admins.findMany({
+      orderBy: [asc(admins.id)],
+      limit: opts.page_size,
+      offset,
+    }),
+    db.execute<{ count: string }>(sql`SELECT COUNT(*)::text AS count FROM admins`),
+  ]);
+  const total = Number((totalRow.rows[0] as { count: string }).count);
+  return { items: items.map(toDomain), total };
 }
 
 export class AdminRepoConflictError extends Error {
@@ -208,30 +243,28 @@ export interface CreateAdminInput {
 
 /** 新建账号；username 冲突 throw AdminRepoConflictError。 */
 export async function createAdmin(input: CreateAdminInput): Promise<AdminRecord> {
-  if (adminsByUsername.has(input.username)) {
-    throw new AdminRepoConflictError("username");
+  const db = getDb();
+  try {
+    const [row] = await db
+      .insert(admins)
+      .values({
+        username: input.username,
+        displayName: input.display_name,
+        role: input.role,
+        passwordHash: input.password_hash,
+        status: "active",
+        totpEnrolled: false,
+        mustChangePassword: true,
+        failedLoginCount: 0,
+      })
+      .returning();
+    return toDomain(row!);
+  } catch (e) {
+    if (isUniqueViolation(e, "admins_username_uniq")) {
+      throw new AdminRepoConflictError("username");
+    }
+    throw e;
   }
-  const id = nextAdminId++;
-  const now = new Date();
-  const full: AdminRecord = {
-    id,
-    username: input.username,
-    display_name: input.display_name,
-    role: input.role,
-    status: "active",
-    password_hash: input.password_hash,
-    totp_secret_enc: null,
-    totp_enrolled: false,
-    must_change_password: true,
-    failed_login_count: 0,
-    locked_until: null,
-    last_login_at: null,
-    created_at: now,
-    updated_at: now,
-  };
-  adminsById.set(id, full);
-  adminsByUsername.set(full.username, id);
-  return clone(full);
 }
 
 export interface UpdateAdminProfilePatch {
@@ -244,13 +277,17 @@ export async function updateAdminProfile(
   id: number,
   patch: UpdateAdminProfilePatch,
 ): Promise<AdminRecord | undefined> {
-  const r = adminsById.get(id);
-  if (!r) return undefined;
-  if (patch.display_name !== undefined) r.display_name = patch.display_name;
-  if (patch.role !== undefined) r.role = patch.role;
-  if (patch.status !== undefined) r.status = patch.status;
-  r.updated_at = new Date();
-  return clone(r);
+  const db = getDb();
+  const set: Partial<typeof admins.$inferInsert> = { updatedAt: new Date() };
+  if (patch.display_name !== undefined) set.displayName = patch.display_name;
+  if (patch.role !== undefined) set.role = patch.role;
+  if (patch.status !== undefined) set.status = patch.status;
+  const [row] = await db
+    .update(admins)
+    .set(set)
+    .where(eq(admins.id, id))
+    .returning();
+  return row ? toDomain(row) : undefined;
 }
 
 export async function disableAdmin(id: number): Promise<AdminRecord | undefined> {
@@ -259,18 +296,33 @@ export async function disableAdmin(id: number): Promise<AdminRecord | undefined>
 
 /** 重置 2FA：清空 totp_secret_enc + totp_enrolled=false（密码状态不动）。 */
 export async function clearTotp(id: number): Promise<void> {
-  const r = adminsById.get(id);
-  if (!r) throw new Error(`admin ${id} not found`);
-  r.totp_secret_enc = null;
-  r.totp_enrolled = false;
-  r.updated_at = new Date();
+  const db = getDb();
+  const out = await db
+    .update(admins)
+    .set({ totpSecretEnc: null, totpEnrolled: false, updatedAt: new Date() })
+    .where(eq(admins.id, id))
+    .returning({ id: admins.id });
+  if (out.length === 0) throw new Error(`admin ${id} not found`);
 }
 
 /** 重置密码：替换 password_hash 且置 must_change_password=true。 */
 export async function setMustChangePassword(id: number, passwordHash: string): Promise<void> {
-  const r = adminsById.get(id);
-  if (!r) throw new Error(`admin ${id} not found`);
-  r.password_hash = passwordHash;
-  r.must_change_password = true;
-  r.updated_at = new Date();
+  const db = getDb();
+  const out = await db
+    .update(admins)
+    .set({ passwordHash, mustChangePassword: true, updatedAt: new Date() })
+    .where(eq(admins.id, id))
+    .returning({ id: admins.id });
+  if (out.length === 0) throw new Error(`admin ${id} not found`);
 }
+
+/**
+ * pg 23505 + 约束名匹配：用于将 INSERT/UPDATE 冲突映射回领域错误，避免把整个
+ * driver error 透传到 handler。
+ */
+function isUniqueViolation(e: unknown, constraintName: string): boolean {
+  if (!e || typeof e !== "object") return false;
+  const obj = e as { code?: string; constraint?: string };
+  return obj.code === "23505" && obj.constraint === constraintName;
+}
+

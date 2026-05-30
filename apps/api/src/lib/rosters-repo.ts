@@ -13,6 +13,7 @@
 import { and, asc, between, eq } from "drizzle-orm";
 import { schema } from "@chiyan/db";
 import { getDb } from "./db";
+import { ensureSentinelAdmin } from "./sentinel-admin";
 
 const { dailyRosters } = schema;
 
@@ -99,8 +100,10 @@ export async function findByDateRange(from: string, to: string): Promise<RosterR
 }
 
 export async function _resetRostersRepoForTests(): Promise<void> {
-  // 注意：_resetModelsRepoForTests 已经 TRUNCATE daily_rosters（CASCADE），所以
-  // 当两者按 beforeEach 顺序串行调用时这里是 no-op。单独跑也安全：再 TRUNCATE 一次。
+  // 单独跑（rosters-repo.test.ts 这种）：admins 表可能被前一个文件的
+  // _resetAdminRepoForTests 清掉，rosters created_by=1 会撞 FK。
+  // 因此清完 rosters 再补一次 sentinel admin，幂等。
   const db = getDb();
   await db.delete(dailyRosters);
+  await ensureSentinelAdmin();
 }

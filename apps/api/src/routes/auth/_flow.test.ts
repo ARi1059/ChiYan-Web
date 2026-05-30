@@ -83,8 +83,8 @@ function cookieHeader(jar: Record<string, string>): string {
     .join("; ");
 }
 
-beforeEach(() => {
-  _resetAdminRepoForTests();
+beforeEach(async () => {
+  await _resetAdminRepoForTests();
   _resetChallengeStoreForTests();
   _resetJtiStoreForTests();
   _resetAuditForTests();
