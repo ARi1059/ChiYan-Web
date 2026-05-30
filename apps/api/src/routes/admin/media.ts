@@ -13,8 +13,7 @@
  * patch is_cover=true 时，repo 同步把 model.cover_asset_id 指向本条；is_cover=false
  * 时若 model.cover_asset_id 正指向本条则清零（一次调用同事务，Step 7 切真 DB 仍同事务）。
  */
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join, normalize, resolve, sep } from "node:path";
+import { join, normalize, resolve, sep } from "node:path";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { admin as adminTypes } from "@chiyan/types";
@@ -23,6 +22,8 @@ import type { AppContext } from "../../env";
 import { fail, ok } from "../../lib/api";
 import { writeAudit } from "../../lib/audit";
 import { purgeByTags } from "../../lib/cf-cache";
+import { processUpload } from "../../lib/media-processor";
+import { getSettings } from "../../lib/studio-info-repo";
 import {
   adminCreateMedia,
   adminDeleteMedia,
@@ -136,14 +137,31 @@ app.put(
       return fail(c, 40001, "文件超过 100MB 上限", { sub_code: "too_large" });
     }
 
-    // 4) 落盘
-    await mkdir(dirname(target), { recursive: true });
-    await writeFile(target, new Uint8Array(buf));
+    // 4) 走处理管线 —— sharp 三档落盘 + 水印 + WebP；非图片走 passthrough
+    //    通过 type 推断：sign 时拿到的 type 不在 PUT 里传，object_key 扩展也未必准。
+    //    用 Content-Type header 兜底（前端 axios 默认会带）；判图片靠 image/* 前缀。
+    const contentType = c.req.header("Content-Type") ?? "";
+    const mediaType: "image" | "video" = contentType.startsWith("video/") ? "video" : "image";
+    const settings = await getSettings();
+    const result = await processUpload({
+      bytes: new Uint8Array(buf),
+      objectKey: key,
+      mediaType,
+      mediaRoot: c.env.MEDIA_ROOT,
+      watermarkText: settings.name,
+    });
 
-    // 5) 标记可 register
-    _markKeyUploaded(key);
+    // 5) 标记可 register，携带处理结果
+    _markKeyUploaded(key, result.meta);
 
-    return ok(c, { object_key: key, bytes: buf.byteLength });
+    return ok(c, {
+      object_key: key,
+      bytes: buf.byteLength,
+      width: result.meta.width,
+      height: result.meta.height,
+      has_watermark: result.meta.hasWatermark,
+      thumb_object_key: result.meta.thumbObjectKey,
+    });
   },
 );
 
@@ -155,27 +173,37 @@ app.post(
   zValidator("json", adminTypes.AdminMediaRegisterRequest),
   async (c) => {
     const input = c.req.valid("json");
-    if (!_consumeSignedKey(input.object_key)) {
+    const meta = _consumeSignedKey(input.object_key);
+    if (!meta) {
       return fail(c, 40001, "object_key 未签或已过期", { sub_code: "unknown_key" });
     }
     const operator = c.get("admin")!;
-    // VPS 自部署：url / original_url 都指向本机 /media/<key>（同源静态服务）。
-    // Step 7 切真 CDN 时 url 改成 CDN edge，original_url 保留指向私有桶。
+    // VPS 自部署：url / original_url / thumb_url 都指向本机 /media/...（同源静态服务）。
+    // - url:          MEDIA_ROOT/<object_key>          —— 处理后主图（已水印 / WebP）
+    // - original_url: MEDIA_ROOT/originals/<object_key> —— 原始 bytes，留作审查
+    // - thumb_url:    MEDIA_ROOT/thumbs/<thumb_key>    —— 缩略（无水印）
+    // 没走 PUT 处理管线（meta 为 EMPTY）时退化：url=original_url，thumb=null
     const base = c.env.API_PUBLIC_URL.replace(/\/+$/, "");
     const url = `${base}/media/${input.object_key}`;
-    const original_url = url;
+    const original_url = meta.thumbObjectKey
+      ? `${base}/media/originals/${input.object_key}`
+      : url;
+    const thumb_url = meta.thumbObjectKey
+      ? `${base}/media/${meta.thumbObjectKey}`
+      : null;
     try {
       const created = await adminCreateMedia({
         model_id: input.model_id ?? null,
         type: input.type,
         url,
         original_url,
-        thumb_url: null,
-        width: input.width ?? null,
-        height: input.height ?? null,
-        file_size: input.file_size,
+        thumb_url,
+        // 服务器侧元信息优先（防前端伪造）；只有没跑管线时才退回 input
+        width: meta.width ?? input.width ?? null,
+        height: meta.height ?? input.height ?? null,
+        file_size: meta.fileSize ?? input.file_size,
         hash: input.hash,
-        has_watermark: false,
+        has_watermark: meta.hasWatermark,
         uploaded_by: operator.admin_id,
       });
       await writeAudit({

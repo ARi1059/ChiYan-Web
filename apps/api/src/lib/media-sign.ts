@@ -25,8 +25,33 @@ const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
  * 一次性消费的 key 集合：register 时 consume。
  * 写入时机：upload PUT 落盘成功后由 _markKeyUploaded 写入。
  * sign 不写入 —— 没真上传就 register 必然失败。
+ *
+ * value 携带 PUT 时计算出的元信息（宽高、缩略图 key、水印标记），register 直接消费，
+ * 避免相信前端传过来的 width/height（前端可能伪造）。
  */
-const uploadedKeys = new Map<string, Date>();
+export interface UploadedMeta {
+  width: number | null;
+  height: number | null;
+  /** 形如 "thumbs/media/202611/abc.webp"；register 拼成 thumb_url。 */
+  thumbObjectKey: string | null;
+  hasWatermark: boolean;
+  fileSize: number | null;
+}
+
+interface UploadedRecord {
+  expiresAt: Date;
+  meta: UploadedMeta;
+}
+
+const uploadedKeys = new Map<string, UploadedRecord>();
+
+const EMPTY_META: UploadedMeta = {
+  width: null,
+  height: null,
+  thumbObjectKey: null,
+  hasWatermark: false,
+  fileSize: null,
+};
 
 export interface MediaSignResult {
   upload_url: string;
@@ -126,24 +151,31 @@ export async function signMediaUpload(env: Env, input: SignMediaUploadInput): Pr
 /**
  * PUT 落盘成功后调用：标记此 object_key 已真正上传过。
  * 15min 后过期自动清；register 必须在窗口内消费。
+ *
+ * meta 可省（旧测试路径 sign + _markKeyUploaded(key) 直接调，不走 PUT 处理管线）；
+ * 省略时 register 会从 input 字段兜底拿 width/height/hash 等。
  */
-export function _markKeyUploaded(object_key: string): void {
-  uploadedKeys.set(object_key, new Date(Date.now() + SIGN_TTL_MS));
+export function _markKeyUploaded(object_key: string, meta?: UploadedMeta): void {
+  uploadedKeys.set(object_key, {
+    expiresAt: new Date(Date.now() + SIGN_TTL_MS),
+    meta: meta ?? EMPTY_META,
+  });
 }
 
 /**
- * register endpoint 用：消费已上传 key。返 false 表示"未上传过"或"窗口已过"。
+ * register endpoint 用：消费已上传 key。
+ * 返 null 表示"未上传过"或"窗口已过"；返 UploadedMeta 表示成功。
  * 成功消费后 key 即从 map 删除（一次性，重复 register 同 key 会失败）。
  */
-export function _consumeSignedKey(object_key: string): boolean {
-  const exp = uploadedKeys.get(object_key);
-  if (!exp) return false;
-  if (exp.getTime() < Date.now()) {
+export function _consumeSignedKey(object_key: string): UploadedMeta | null {
+  const r = uploadedKeys.get(object_key);
+  if (!r) return null;
+  if (r.expiresAt.getTime() < Date.now()) {
     uploadedKeys.delete(object_key);
-    return false;
+    return null;
   }
   uploadedKeys.delete(object_key);
-  return true;
+  return r.meta;
 }
 
 export function _resetMediaSignForTests(): void {

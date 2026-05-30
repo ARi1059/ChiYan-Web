@@ -87,17 +87,40 @@ describe("signUploadSig / verifyUploadSig (HMAC)", () => {
 });
 
 describe("_markKeyUploaded + _consumeSignedKey", () => {
-  it("sign 不写 → consume 失败；_markKeyUploaded 后 consume true，再 consume false", async () => {
+  it("sign 不写 → consume 失败；_markKeyUploaded 后 consume 返 meta；再 consume null", async () => {
     const r = await signMediaUpload(ENV, { type: "image", filename: "x.png", content_type: "image/png" });
     // 仅 sign 还没 PUT，register 必败
-    expect(_consumeSignedKey(r.object_key)).toBe(false);
+    expect(_consumeSignedKey(r.object_key)).toBeNull();
     _markKeyUploaded(r.object_key);
-    expect(_consumeSignedKey(r.object_key)).toBe(true);
+    // 没传 meta → 默认 EMPTY_META 结构（width null 等）但对象本身 truthy
+    const meta = _consumeSignedKey(r.object_key);
+    expect(meta).not.toBeNull();
+    expect(meta?.width).toBeNull();
+    expect(meta?.hasWatermark).toBe(false);
     // 一次性
-    expect(_consumeSignedKey(r.object_key)).toBe(false);
+    expect(_consumeSignedKey(r.object_key)).toBeNull();
   });
 
-  it("从未 sign 过的 key → false", () => {
-    expect(_consumeSignedKey("media/202605/unknownkey.jpg")).toBe(false);
+  it("从未 sign 过的 key → null", () => {
+    expect(_consumeSignedKey("media/202605/unknownkey.jpg")).toBeNull();
+  });
+
+  it("携带 meta → consume 返回 meta", async () => {
+    const r = await signMediaUpload(ENV, { type: "image", filename: "y.jpg", content_type: "image/jpeg" });
+    _markKeyUploaded(r.object_key, {
+      width: 800,
+      height: 1200,
+      thumbObjectKey: "thumbs/media/X/abc.webp",
+      hasWatermark: true,
+      fileSize: 12345,
+    });
+    const meta = _consumeSignedKey(r.object_key);
+    expect(meta).toEqual({
+      width: 800,
+      height: 1200,
+      thumbObjectKey: "thumbs/media/X/abc.webp",
+      hasWatermark: true,
+      fileSize: 12345,
+    });
   });
 });

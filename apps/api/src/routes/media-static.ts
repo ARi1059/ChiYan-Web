@@ -6,7 +6,10 @@
  * 安全：
  *  - 路径 resolve 后必须仍在 MEDIA_ROOT 之内（防 ../ traversal）
  *  - 仅 GET / HEAD；其它方法走默认 404
- *  - Content-Type 按扩展名简表，未识别 → application/octet-stream
+ *  - Content-Type 先嗅 magic bytes（webp/png/jpeg/gif/mp4），失败回退按扩展名简表，
+ *    都未识别 → application/octet-stream。
+ *    背景：媒体管线把图全转 WebP 后写回原 .jpg 路径，前端浏览器看 Content-Type 渲染，
+ *    不能信扩展名。
  *
  * 性能：mock 阶段 readFile 全读到内存即可（H5 上传图 < 几 MB）。Step 7 切流式或 CDN。
  *
@@ -31,6 +34,40 @@ const MIME: Record<string, string> = {
   ".mov": "video/quicktime",
 };
 
+/** 嗅前 12 字节判常见图/视频 magic；未识别返 null。 */
+function sniffMime(buf: Buffer | Uint8Array): string | null {
+  if (buf.length >= 12) {
+    // RIFF????WEBP
+    if (
+      buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50
+    ) return "image/webp";
+    // ftyp (mp4 / mov)
+    if (
+      buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70
+    ) return "video/mp4";
+  }
+  if (buf.length >= 8) {
+    // \x89PNG\r\n\x1a\n
+    if (
+      buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
+      buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a
+    ) return "image/png";
+  }
+  if (buf.length >= 6) {
+    // GIF87a / GIF89a
+    if (
+      buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 &&
+      buf[3] === 0x38 && (buf[4] === 0x37 || buf[4] === 0x39) && buf[5] === 0x61
+    ) return "image/gif";
+  }
+  if (buf.length >= 3) {
+    // JPEG SOI: FF D8 FF
+    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  }
+  return null;
+}
+
 const app = new Hono<AppContext>();
 
 app.get("/*", async (c) => {
@@ -53,7 +90,9 @@ app.get("/*", async (c) => {
   if (!info.isFile()) return c.notFound();
 
   const buf = await readFile(target);
-  const mime = MIME[extname(target).toLowerCase()] ?? "application/octet-stream";
+  // magic 优先；嗅不出再退扩展名表（媒体管线把图全转 WebP 写回 .jpg 路径，扩展名不可信）
+  const mime =
+    sniffMime(buf) ?? MIME[extname(target).toLowerCase()] ?? "application/octet-stream";
   c.header("Content-Type", mime);
   c.header("Content-Length", String(info.size));
   c.header("Cache-Control", "public, max-age=2592000, immutable");
