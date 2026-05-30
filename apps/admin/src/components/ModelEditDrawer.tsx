@@ -14,13 +14,12 @@
  * 新建模特时 modelId 还没有，画廊编辑要灰掉（提示先保存基本信息再来编画廊）。
  * 保存：新增 createAdminModel；编辑 patchAdminModel（仅含真改了的字段）。
  */
-import { useEffect, useRef, useState } from "react";
-import { X, Upload, Check } from "lucide-react";
+import { useEffect, useState } from "react";
+import { X, Check } from "lucide-react";
 import {
   AdminApiError,
   createAdminModel,
   patchAdminModel,
-  uploadMedia,
   type AdminCreateModelInput,
   type AdminModelDetail,
 } from "@chiyan/api-client";
@@ -74,7 +73,6 @@ interface FormState {
   can_remote: boolean;
   is_minor: boolean;
   cover_asset_id: number | undefined;
-  cover_preview_url: string | undefined;
   gallery_asset_ids: number[];
   portfolio: PortfolioRow[];
   cooperation_history: PortfolioRow[];
@@ -101,13 +99,12 @@ const EMPTY: FormState = {
   can_remote: false,
   is_minor: false,
   cover_asset_id: undefined,
-  cover_preview_url: undefined,
   gallery_asset_ids: [],
   portfolio: [],
   cooperation_history: [],
 };
 
-function detailToForm(d: AdminModelDetail, coverUrl: string | undefined): FormState {
+function detailToForm(d: AdminModelDetail): FormState {
   return {
     code: d.code,
     nickname: d.nickname,
@@ -129,7 +126,6 @@ function detailToForm(d: AdminModelDetail, coverUrl: string | undefined): FormSt
     can_remote: d.can_remote,
     is_minor: d.is_minor,
     cover_asset_id: d.cover_asset_id,
-    cover_preview_url: coverUrl,
     gallery_asset_ids: [...d.gallery_asset_ids],
     portfolio: d.portfolio.map((p) => ({ ...p })),
     cooperation_history: d.cooperation_history.map((p) => ({ ...p })),
@@ -288,7 +284,6 @@ interface Props {
   open: boolean;
   mode: "new" | "edit";
   initial: AdminModelDetail | null;
-  initialCoverUrl: string | undefined;
   accessToken: string;
   onClose: () => void;
   onSaved: () => void;
@@ -298,7 +293,6 @@ export function ModelEditDrawer({
   open,
   mode,
   initial,
-  initialCoverUrl,
   accessToken,
   onClose,
   onSaved,
@@ -306,18 +300,15 @@ export function ModelEditDrawer({
   const [form, setForm] = useState<FormState>(EMPTY);
   const [snapshot, setSnapshot] = useState<FormState>(EMPTY);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    const next =
-      mode === "edit" && initial ? detailToForm(initial, initialCoverUrl) : EMPTY;
+    const next = mode === "edit" && initial ? detailToForm(initial) : EMPTY;
     setForm(next);
     setSnapshot(next);
     setError(null);
-  }, [open, mode, initial, initialCoverUrl]);
+  }, [open, mode, initial]);
 
   if (!open) return null;
 
@@ -329,22 +320,6 @@ export function ModelEditDrawer({
       ...p,
       [k]: p[k].includes(v) ? p[k].filter((x) => x !== v) : [...p[k], v],
     }));
-
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setError(null);
-    setUploading(true);
-    try {
-      const r = await uploadMedia(file, accessToken, { type: "image" });
-      setForm((p) => ({ ...p, cover_asset_id: r.media_asset_id, cover_preview_url: r.url }));
-    } catch (err) {
-      setError(err instanceof AdminApiError ? `上传失败：${err.message}` : "上传失败");
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const handleSave = async () => {
     if (saving) return;
@@ -402,7 +377,7 @@ export function ModelEditDrawer({
             </button>
             <button
               onClick={handleSave}
-              disabled={saving || uploading}
+              disabled={saving}
               className="px-3 py-1.5 rounded-md bg-[var(--primary)] text-[var(--primary-fg)] text-sm font-medium disabled:opacity-50"
             >
               {saving ? "保存中…" : "保存"}
@@ -528,45 +503,6 @@ export function ModelEditDrawer({
             </div>
           </Section>
 
-          <Section title="封面">
-            <div className="flex items-start gap-3">
-              {form.cover_preview_url ? (
-                <img
-                  src={form.cover_preview_url}
-                  alt="cover"
-                  className="w-24 h-32 object-cover rounded-md border border-[var(--border)] bg-[var(--bg)]"
-                />
-              ) : (
-                <div className="w-24 h-32 rounded-md border border-dashed border-[var(--border)] bg-[var(--bg)] flex items-center justify-center text-[var(--muted)] text-xs">
-                  无封面
-                </div>
-              )}
-              <div className="flex-1">
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploading}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--border)] text-sm hover:bg-[var(--bg)] disabled:opacity-50"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  {uploading ? "上传中…" : "上传封面"}
-                </button>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={handleUpload}
-                />
-                {form.cover_asset_id !== undefined && (
-                  <p className="text-xs text-[var(--muted)] mt-1.5">
-                    media_asset_id: {form.cover_asset_id}
-                  </p>
-                )}
-              </div>
-            </div>
-          </Section>
-
           <Section title="画廊">
             <GalleryEditor
               modelId={initial?.id}
@@ -577,9 +513,6 @@ export function ModelEditDrawer({
                 setForm((p) => ({
                   ...p,
                   cover_asset_id: next.coverAssetId,
-                  // 切换封面或删除时清掉过期 preview，下次保存后父级会重读
-                  cover_preview_url:
-                    next.coverAssetId === p.cover_asset_id ? p.cover_preview_url : undefined,
                   gallery_asset_ids: next.galleryAssetIds,
                 }));
               }}

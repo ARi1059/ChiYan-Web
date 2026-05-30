@@ -11,7 +11,7 @@
  * 封面缩略图：admin endpoint 不直接出 url，并行拉 /public/models?page_size=100 用 code 关联 cover.src；
  * 找不到则显示灰块。这与 H5 的 fetchAdminSnapshot 思路一致。
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Trash2, RefreshCw, Plus, Pencil } from "lucide-react";
 import { useAuth } from "../store/AuthContext";
 import {
@@ -85,11 +85,6 @@ export function ModelsPage() {
       setError(e instanceof AdminApiError ? `${e.message}（${e.code}）` : "删除失败");
     }
   };
-
-  const editingCoverUrl = useMemo(
-    () => (editingRow ? covers.get(editingRow.code) : undefined),
-    [editingRow, covers],
-  );
 
   return (
     <div className="p-8">
@@ -234,7 +229,6 @@ export function ModelsPage() {
           open={drawerMode !== null}
           mode={drawerMode}
           initial={editingRow}
-          initialCoverUrl={editingCoverUrl}
           accessToken={session.access_token}
           onClose={() => {
             setDrawerMode(null);

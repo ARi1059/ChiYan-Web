@@ -1,10 +1,12 @@
 /**
- * E2E 测试专用入口：复用主 app，但启动前往 in-memory mock repos 种一个 owner 账号。
+ * E2E 测试专用入口：复用主 app，启动前往真 drizzle admins 表种一个 owner 账号。
  *
- * - totp_enrolled = false → 走 bootstrap 路径，/auth/login/totp 不校验 6 位 code（任何 6 位数字都过）
- * - password = "ChiYan-Test-Password-1!" 满足 LoginRequest schema (min 12)
+ * - username = "owner"，password = "ChiYan-Test-Password-1!"
+ * - totp_enrolled = true，TOTP secret = E2E_TOTP_SECRET（与 e2e/totp-secret.ts 共享）
+ *   登录时必须用 currentTotpCode() 算当下 6 位 code，**不是任何 6 位都过**
  * - role = owner → 所有 admin 接口都能写
  *
+ * 启动是 INSERT（不 upsert），admins 表里已有 owner 会 23505 — 跑前先 TRUNCATE。
  * 仅 ENV=dev 时启用；prod 用 server.ts，不会执行 seed。
  */
 import "dotenv/config";

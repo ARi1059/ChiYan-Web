@@ -60,12 +60,6 @@ export function GalleryEditor({
   const [busyAssetId, setBusyAssetId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const allIds = useMemo(() => {
-    const set = new Set<number>(galleryAssetIds);
-    if (coverAssetId !== undefined) set.add(coverAssetId);
-    return Array.from(set);
-  }, [coverAssetId, galleryAssetIds]);
-
   // 拉一次列表把 id → metadata 填进 assetIndex。
   // 触发：drawer 挂载时 modelId 已确定就拉，不依赖 allIds 是否有内容 ——
   //   挂载瞬间父级 form 还是 EMPTY，props galleryAssetIds=[]/cover=undefined；
@@ -246,11 +240,9 @@ export function GalleryEditor({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-medium">画廊</div>
-        <div className="text-xs text-[var(--muted)]">
-          {tiles.length} 张 · 首张为封面
-        </div>
+      {/* "画廊"二字由 ModelEditDrawer 外层 <Section title="画廊"> 渲染，这里只放 meta */}
+      <div className="flex items-center justify-end text-xs text-[var(--muted)]">
+        {tiles.length > 0 ? `${tiles.length} 张 · 首张为封面` : null}
       </div>
 
       {modelId === undefined && (
