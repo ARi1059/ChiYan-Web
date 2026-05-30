@@ -19,10 +19,16 @@
     "lint": "pnpm -r run lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml,css}\" --ignore-path .gitignore --ignore-path .prettierignore",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml,css}\" --ignore-path .gitignore --ignore-path .prettierignore",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "db:migrate": "pnpm --filter @chiyan/db migrate",
+    "db:generate": "pnpm --filter @chiyan/db generate",
     "clean": "pnpm -r run clean && rm -rf node_modules"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/node": "^22.10.0",
+    "otpauth": "^9.5.1",
     "prettier": "^3.4.0",
     "typescript": "~5.7.2"
   }

@@ -73,6 +73,39 @@ pnpm test
 pnpm format
 ```
 
+### 首次本机 Postgres / Redis 引导
+
+apps/api 启动期会连本机 Postgres 跑 drizzle，apps/api 跑测试期会连独立的 `chiyan_test` 库。
+
+```bash
+# 1. 装 Postgres 16（macOS）
+brew install postgresql@16
+brew services start postgresql@16
+
+# 2. 装 Redis 7
+brew install redis
+brew services start redis
+
+# 3. 建用户与三个库（dev / staging / test）
+createuser chiyan
+createdb -O chiyan chiyan_dev
+createdb -O chiyan chiyan_test
+
+# 4. 启 pg_trgm 扩展（GIN 模糊索引依赖；migration 0000 第一行需要）
+psql chiyan_dev  -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS pgcrypto'
+psql chiyan_test -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS pgcrypto'
+
+# 5. 跑 drizzle migrations
+DATABASE_URL='postgresql://chiyan:@127.0.0.1:5432/chiyan_dev'  pnpm db:migrate
+DATABASE_URL='postgresql://chiyan:@127.0.0.1:5432/chiyan_test' pnpm db:migrate
+
+# 6. 跑 API 测试（vitest setup 会再 migrate 一次幂等兜底，beforeEach 走 TRUNCATE）
+pnpm --filter @chiyan/api test
+```
+
+如果 chiyan 用户加了密码，记得把 `.env.local` 里的 `DATABASE_URL_DEV` / `DATABASE_URL_STAGING` 填上真实密码；
+测试库可在每次跑测试前 export `TEST_DATABASE_URL='postgresql://chiyan:<pw>@127.0.0.1:5432/chiyan_test'` 覆盖默认值。
+
 ### 默认端口
 
 | 服务 | 端口 |
