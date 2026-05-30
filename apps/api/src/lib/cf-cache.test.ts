@@ -43,10 +43,10 @@ describe("cf-cache.purgeByTags", () => {
   });
 
   it("配置齐全 → POST 到 zones/{ZONE_ID}/purge_cache + Bearer + JSON body", async () => {
-    await purgeByTags(
-      makeEnv({ CF_API_TOKEN: "tok-abc", CF_ZONE_ID: "zone-xyz" }),
-      ["model:M-2026-0001", "roster:2026-05-29"],
-    );
+    await purgeByTags(makeEnv({ CF_API_TOKEN: "tok-abc", CF_ZONE_ID: "zone-xyz" }), [
+      "model:M-2026-0001",
+      "roster:2026-05-29",
+    ]);
     expect(fetchSpy).toHaveBeenCalledOnce();
     const [url, init] = fetchSpy.mock.calls[0]!;
     expect(url).toBe("https://api.cloudflare.com/client/v4/zones/zone-xyz/purge_cache");

@@ -34,7 +34,9 @@ describe("signMediaUpload", () => {
 
   it("API_PUBLIC_URL 尾斜杠去重", async () => {
     const res = await signMediaUpload(
-      { ...ENV, API_PUBLIC_URL: "http://localhost:3000///" } as Parameters<typeof signMediaUpload>[0],
+      { ...ENV, API_PUBLIC_URL: "http://localhost:3000///" } as Parameters<
+        typeof signMediaUpload
+      >[0],
       { type: "image", filename: "a.png", content_type: "image/png" },
     );
     expect(res.upload_url.startsWith("http://localhost:3000/api/v1/admin/media/upload")).toBe(true);
@@ -49,7 +51,11 @@ describe("signMediaUpload", () => {
 
   it("expires_at 约 15min 后", async () => {
     const before = Date.now();
-    const r = await signMediaUpload(ENV, { type: "image", filename: "a.png", content_type: "image/png" });
+    const r = await signMediaUpload(ENV, {
+      type: "image",
+      filename: "a.png",
+      content_type: "image/png",
+    });
     const after = Date.now();
     const diff = r.expires_at.getTime() - before;
     expect(diff).toBeGreaterThanOrEqual(15 * 60 * 1000 - 50);
@@ -88,7 +94,11 @@ describe("signUploadSig / verifyUploadSig (HMAC)", () => {
 
 describe("_markKeyUploaded + _consumeSignedKey", () => {
   it("sign 不写 → consume 失败；_markKeyUploaded 后 consume 返 meta；再 consume null", async () => {
-    const r = await signMediaUpload(ENV, { type: "image", filename: "x.png", content_type: "image/png" });
+    const r = await signMediaUpload(ENV, {
+      type: "image",
+      filename: "x.png",
+      content_type: "image/png",
+    });
     // 仅 sign 还没 PUT，register 必败
     expect(_consumeSignedKey(r.object_key)).toBeNull();
     _markKeyUploaded(r.object_key);
@@ -106,7 +116,11 @@ describe("_markKeyUploaded + _consumeSignedKey", () => {
   });
 
   it("携带 meta → consume 返回 meta", async () => {
-    const r = await signMediaUpload(ENV, { type: "image", filename: "y.jpg", content_type: "image/jpeg" });
+    const r = await signMediaUpload(ENV, {
+      type: "image",
+      filename: "y.jpg",
+      content_type: "image/jpeg",
+    });
     _markKeyUploaded(r.object_key, {
       width: 800,
       height: 1200,

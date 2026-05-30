@@ -106,9 +106,7 @@ app.get(
     const { items, total } = await adminListModels(opts);
     const me = await operatorIsAdmin(c);
     const includeRealName = me?.role === "owner" || me?.role === "admin";
-    const serialized = await Promise.all(
-      items.map((m) => serializeDetail(c, m, includeRealName)),
-    );
+    const serialized = await Promise.all(items.map((m) => serializeDetail(c, m, includeRealName)));
     return ok(c, {
       items: serialized,
       total,

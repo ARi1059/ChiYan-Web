@@ -47,15 +47,24 @@ export async function issueSession(
   const refresh_jti = newJti();
   const sub = String(adminId);
   const [access_token, refresh_token] = await Promise.all([
-    signJwt({ sub, jti: access_jti, kind: "access" as JwtKind, ttlSec: TTL.access }, c.env.JWT_SECRET),
-    signJwt({ sub, jti: refresh_jti, kind: "refresh" as JwtKind, ttlSec: TTL.refresh }, c.env.JWT_SECRET),
+    signJwt(
+      { sub, jti: access_jti, kind: "access" as JwtKind, ttlSec: TTL.access },
+      c.env.JWT_SECRET,
+    ),
+    signJwt(
+      { sub, jti: refresh_jti, kind: "refresh" as JwtKind, ttlSec: TTL.refresh },
+      c.env.JWT_SECRET,
+    ),
   ]);
   setRefreshCookie(c, refresh_token);
   setCsrfCookie(c, generateCsrfToken());
   return { access_token, refresh_token, access_jti, refresh_jti };
 }
 
-export async function issueChallenge(c: Context<AppContext>, adminId: number): Promise<{ challenge_token: string; jti: string }> {
+export async function issueChallenge(
+  c: Context<AppContext>,
+  adminId: number,
+): Promise<{ challenge_token: string; jti: string }> {
   const jti = newJti();
   const challenge_token = await signJwt(
     { sub: String(adminId), jti, kind: "totp_challenge" as JwtKind, ttlSec: TTL.challenge },

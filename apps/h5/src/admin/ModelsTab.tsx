@@ -24,8 +24,30 @@ const BLANK: EditingModel = {
   featured: false,
 };
 
-const DISTRICTS = ["锦江区", "武侯区", "成华区", "金牛区", "青羊区", "高新区", "双流区", "天府新区"];
-const COMMON_STYLES = ["清纯", "时尚", "甜美", "OL", "高冷", "邻家", "复古", "知性", "活力", "仙气", "国风", "运动"];
+const DISTRICTS = [
+  "锦江区",
+  "武侯区",
+  "成华区",
+  "金牛区",
+  "青羊区",
+  "高新区",
+  "双流区",
+  "天府新区",
+];
+const COMMON_STYLES = [
+  "清纯",
+  "时尚",
+  "甜美",
+  "OL",
+  "高冷",
+  "邻家",
+  "复古",
+  "知性",
+  "活力",
+  "仙气",
+  "国风",
+  "运动",
+];
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -97,8 +119,7 @@ function ModelForm({
       // 同时存：H5 photo URL（用于预览/前端渲染）+ coverAssetId（API 写路径要 cover_asset_id 数字 id）
       setForm((prev) => ({ ...prev, photo: r.url, coverAssetId: r.media_asset_id }));
     } catch (err) {
-      const msg =
-        err instanceof AdminApiError ? `${err.message}（${err.code}）` : "上传失败";
+      const msg = err instanceof AdminApiError ? `${err.message}（${err.code}）` : "上传失败";
       setUploadError(msg);
     } finally {
       setUploading(false);
@@ -120,8 +141,7 @@ function ModelForm({
     try {
       await onSave({ ...form, styles });
     } catch (err) {
-      const msg =
-        err instanceof AdminApiError ? `${err.message}（${err.code}）` : "保存失败";
+      const msg = err instanceof AdminApiError ? `${err.message}（${err.code}）` : "保存失败";
       setSaveError(msg);
     } finally {
       setSaving(false);
@@ -133,9 +153,7 @@ function ModelForm({
       .split(/[、,，\s]+/)
       .map((x) => x.trim())
       .filter(Boolean);
-    const next = current.includes(s)
-      ? current.filter((x) => x !== s)
-      : [...current, s];
+    const next = current.includes(s) ? current.filter((x) => x !== s) : [...current, s];
     setStylesInput(next.join("、"));
   };
 
@@ -177,19 +195,23 @@ function ModelForm({
         </Field>
 
         <Field label="化名">
-          <TextInput
-            value={form.alias}
-            onChange={(v) => set("alias", v)}
-            placeholder="模特化名"
-          />
+          <TextInput value={form.alias} onChange={(v) => set("alias", v)} placeholder="模特化名" />
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="身高 (cm)">
-            <TextInput type="number" value={form.height} onChange={(v) => set("height", Number(v))} />
+            <TextInput
+              type="number"
+              value={form.height}
+              onChange={(v) => set("height", Number(v))}
+            />
           </Field>
           <Field label="体重 (kg)">
-            <TextInput type="number" value={form.weight} onChange={(v) => set("weight", Number(v))} />
+            <TextInput
+              type="number"
+              value={form.weight}
+              onChange={(v) => set("weight", Number(v))}
+            />
           </Field>
           <Field label="胸围 (cm)">
             <TextInput type="number" value={form.bust} onChange={(v) => set("bust", Number(v))} />
@@ -209,7 +231,7 @@ function ModelForm({
                   "px-3 py-1 rounded-full text-xs border transition-colors",
                   form.district === d
                     ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card text-foreground border-border"
+                    : "bg-card text-foreground border-border",
                 )}
               >
                 {d}
@@ -228,7 +250,7 @@ function ModelForm({
                   "flex-1 py-2 rounded-[10px] text-sm border transition-colors",
                   form.status === s
                     ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card text-foreground border-border"
+                    : "bg-card text-foreground border-border",
                 )}
               >
                 {s}
@@ -247,7 +269,7 @@ function ModelForm({
                   "px-3 py-1 rounded-full text-xs border transition-colors",
                   currentStyles.includes(s)
                     ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card text-foreground border-border"
+                    : "bg-card text-foreground border-border",
                 )}
               >
                 {s}
@@ -298,9 +320,7 @@ function ModelForm({
               onChange={(v) => set("photo", v)}
               placeholder="或粘贴外链 URL"
             />
-            {uploadError && (
-              <p className="text-xs text-destructive">{uploadError}</p>
-            )}
+            {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
             {form.photo && (
               <img
                 src={form.photo}
@@ -328,7 +348,7 @@ function ModelForm({
               "flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm border transition-colors",
               form.featured
                 ? "bg-primary text-primary-foreground border-primary"
-                : "bg-card text-foreground border-border"
+                : "bg-card text-foreground border-border",
             )}
           >
             {form.featured && <Check className="w-4 h-4" />}
@@ -386,20 +406,13 @@ export function ModelsTab() {
       await deleteModel(id);
       setConfirmDelete(null);
     } catch (err) {
-      const msg =
-        err instanceof AdminApiError ? `${err.message}（${err.code}）` : "删除失败";
+      const msg = err instanceof AdminApiError ? `${err.message}（${err.code}）` : "删除失败";
       setListError(msg);
     }
   };
 
   if (editing) {
-    return (
-      <ModelForm
-        initial={editing}
-        onSave={handleSave}
-        onCancel={() => setEditing(null)}
-      />
-    );
+    return <ModelForm initial={editing} onSave={handleSave} onCancel={() => setEditing(null)} />;
   }
 
   return (
@@ -437,7 +450,9 @@ export function ModelsTab() {
             <div className="flex items-center gap-2">
               <p className="text-sm text-foreground">{model.alias}</p>
               {model.featured && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">推荐</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                  推荐
+                </span>
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">

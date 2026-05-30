@@ -18,18 +18,9 @@ import {
   _resetModelsRepoForTests,
   type ModelRecord,
 } from "../../lib/models-repo";
-import {
-  _getVisitsForTests,
-  _resetVisitsRepoForTests,
-} from "../../lib/visits-repo";
-import {
-  _resetRostersRepoForTests,
-  _upsertRosterForTests,
-} from "../../lib/rosters-repo";
-import {
-  _resetStudioInfoRepoForTests,
-  _setForTests,
-} from "../../lib/studio-info-repo";
+import { _getVisitsForTests, _resetVisitsRepoForTests } from "../../lib/visits-repo";
+import { _resetRostersRepoForTests, _upsertRosterForTests } from "../../lib/rosters-repo";
+import { _resetStudioInfoRepoForTests, _setForTests } from "../../lib/studio-info-repo";
 import { _resetRateLimitForTests } from "../../middleware/rate-limit";
 
 const ENV = {
@@ -177,19 +168,43 @@ describe("GET /public/today", () => {
 
 describe("GET /public/models（列表 + filter）", () => {
   beforeEach(async () => {
-    await seedModelWithCover({ code: "M-2026-0001", nickname: "Aiko", style_tags: ["御姐"], available_types: ["写真"] });
-    await seedModelWithCover({ code: "M-2026-0002", nickname: "Bei", style_tags: ["校园"], available_types: ["走秀"] });
-    await seedModelWithCover({ code: "M-2026-0003", nickname: "Cici", style_tags: ["御姐"], available_types: ["写真"] });
-    await seedModelWithCover({ code: "M-2026-0004", nickname: "Dora", status: "archived", style_tags: ["御姐"] });
+    await seedModelWithCover({
+      code: "M-2026-0001",
+      nickname: "Aiko",
+      style_tags: ["御姐"],
+      available_types: ["写真"],
+    });
+    await seedModelWithCover({
+      code: "M-2026-0002",
+      nickname: "Bei",
+      style_tags: ["校园"],
+      available_types: ["走秀"],
+    });
+    await seedModelWithCover({
+      code: "M-2026-0003",
+      nickname: "Cici",
+      style_tags: ["御姐"],
+      available_types: ["写真"],
+    });
+    await seedModelWithCover({
+      code: "M-2026-0004",
+      nickname: "Dora",
+      status: "archived",
+      style_tags: ["御姐"],
+    });
   });
 
   it("style=御姐 + 分页 page_size=2", async () => {
-    const res = await makeRequest("/api/v1/public/models?style=%E5%BE%A1%E5%A7%90&page=1&page_size=2");
+    const res = await makeRequest(
+      "/api/v1/public/models?style=%E5%BE%A1%E5%A7%90&page=1&page_size=2",
+    );
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe(
       "public, max-age=600, s-maxage=600, stale-while-revalidate=120",
     );
-    const body = (await res.json()) as { data: { items: { code: string }[]; total: number; page: number } };
+    const body = (await res.json()) as {
+      data: { items: { code: string }[]; total: number; page: number };
+    };
     expect(body.data.total).toBe(2); // archived M-2026-0004 不计
     expect(body.data.items).toHaveLength(2);
     expect(body.data.items.map((m) => m.code).sort()).toEqual(["M-2026-0001", "M-2026-0003"]);
@@ -251,11 +266,11 @@ describe("GET /public/models/:code（三态）", () => {
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text).not.toContain("weight_kg");
-    expect(text).not.toContain("\"bust\"");
-    expect(text).not.toContain("\"waist\"");
-    expect(text).not.toContain("\"hip\"");
+    expect(text).not.toContain('"bust"');
+    expect(text).not.toContain('"waist"');
+    expect(text).not.toContain('"hip"');
     expect(text).not.toContain("shoe_size_eu");
-    expect(text).toContain("\"height_cm\":170");
+    expect(text).toContain('"height_cm":170');
   });
 
   it("非法 code 格式 → 400 validation（zValidator 自有 400 响应，不走 envelope）", async () => {

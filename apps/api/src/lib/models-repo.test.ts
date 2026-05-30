@@ -99,10 +99,39 @@ describe("models-repo / findActiveByIds", () => {
 
 describe("models-repo / listActive filter + pagination", () => {
   beforeEach(async () => {
-    await _insertModelForTests(makeModel({ code: "M-2026-0001", nickname: "Aiko", style_tags: ["御姐"], available_types: ["写真"] }));
-    await _insertModelForTests(makeModel({ code: "M-2026-0002", nickname: "Bei", style_tags: ["校园"], available_types: ["走秀"] }));
-    await _insertModelForTests(makeModel({ code: "M-2026-0003", nickname: "Cici", style_tags: ["御姐", "成熟"], available_types: ["写真"] }));
-    await _insertModelForTests(makeModel({ code: "M-2026-0004", nickname: "Dora", status: "archived", style_tags: ["御姐"], available_types: ["写真"] }));
+    await _insertModelForTests(
+      makeModel({
+        code: "M-2026-0001",
+        nickname: "Aiko",
+        style_tags: ["御姐"],
+        available_types: ["写真"],
+      }),
+    );
+    await _insertModelForTests(
+      makeModel({
+        code: "M-2026-0002",
+        nickname: "Bei",
+        style_tags: ["校园"],
+        available_types: ["走秀"],
+      }),
+    );
+    await _insertModelForTests(
+      makeModel({
+        code: "M-2026-0003",
+        nickname: "Cici",
+        style_tags: ["御姐", "成熟"],
+        available_types: ["写真"],
+      }),
+    );
+    await _insertModelForTests(
+      makeModel({
+        code: "M-2026-0004",
+        nickname: "Dora",
+        status: "archived",
+        style_tags: ["御姐"],
+        available_types: ["写真"],
+      }),
+    );
   });
 
   it("无 filter → 仅 active", async () => {
@@ -249,9 +278,9 @@ describe("models-repo / admin write paths", () => {
 
   it("adminCreateModel code 重复 → ModelsRepoConflictError", async () => {
     await adminCreateModel({ code: "M-2026-0510", nickname: "F" });
-    await expect(
-      adminCreateModel({ code: "M-2026-0510", nickname: "F2" }),
-    ).rejects.toBeInstanceOf(ModelsRepoConflictError);
+    await expect(adminCreateModel({ code: "M-2026-0510", nickname: "F2" })).rejects.toBeInstanceOf(
+      ModelsRepoConflictError,
+    );
   });
 
   it("adminFindModelById 含 archived（与公开三态不同）", async () => {
@@ -355,19 +384,43 @@ describe("models-repo / admin write paths", () => {
   it("adminListMedia model_id filter + type filter", async () => {
     const m = await adminCreateModel({ code: "M-2026-0801", nickname: "L" });
     await adminCreateMedia({
-      model_id: m.id, type: "image", url: "u1", original_url: "o1",
-      thumb_url: null, width: 1, height: 1, file_size: 1, hash: "h1",
-      has_watermark: false, uploaded_by: 1,
+      model_id: m.id,
+      type: "image",
+      url: "u1",
+      original_url: "o1",
+      thumb_url: null,
+      width: 1,
+      height: 1,
+      file_size: 1,
+      hash: "h1",
+      has_watermark: false,
+      uploaded_by: 1,
     });
     await adminCreateMedia({
-      model_id: m.id, type: "video", url: "u2", original_url: "o2",
-      thumb_url: null, width: 1, height: 1, file_size: 1, hash: "h2",
-      has_watermark: false, uploaded_by: 1,
+      model_id: m.id,
+      type: "video",
+      url: "u2",
+      original_url: "o2",
+      thumb_url: null,
+      width: 1,
+      height: 1,
+      file_size: 1,
+      hash: "h2",
+      has_watermark: false,
+      uploaded_by: 1,
     });
     await adminCreateMedia({
-      model_id: null, type: "image", url: "u3", original_url: "o3",
-      thumb_url: null, width: 1, height: 1, file_size: 1, hash: "h3",
-      has_watermark: false, uploaded_by: 1,
+      model_id: null,
+      type: "image",
+      url: "u3",
+      original_url: "o3",
+      thumb_url: null,
+      width: 1,
+      height: 1,
+      file_size: 1,
+      hash: "h3",
+      has_watermark: false,
+      uploaded_by: 1,
     });
     const byModel = await adminListMedia({ model_id: m.id, page: 1, page_size: 10 });
     expect(byModel.total).toBe(2);
@@ -379,14 +432,30 @@ describe("models-repo / admin write paths", () => {
   it("adminFindMediaById 含 original_url + uploaded_by 全字段", async () => {
     // 用任意一个真实 admin 作为 uploaded_by —— 用例只关心字段被原样回读。
     const uploader = await _insertAdminForTests({
-      username: "uploader", display_name: "uploader", role: "admin", status: "active",
-      password_hash: "$2a$12$" + "x".repeat(53), totp_secret_enc: null, totp_enrolled: false,
-      must_change_password: false, failed_login_count: 0, locked_until: null, last_login_at: null,
+      username: "uploader",
+      display_name: "uploader",
+      role: "admin",
+      status: "active",
+      password_hash: "$2a$12$" + "x".repeat(53),
+      totp_secret_enc: null,
+      totp_enrolled: false,
+      must_change_password: false,
+      failed_login_count: 0,
+      locked_until: null,
+      last_login_at: null,
     });
     const created = await adminCreateMedia({
-      model_id: null, type: "image", url: "u", original_url: "ORIG",
-      thumb_url: null, width: 1, height: 1, file_size: 999, hash: "x",
-      has_watermark: false, uploaded_by: uploader.id,
+      model_id: null,
+      type: "image",
+      url: "u",
+      original_url: "ORIG",
+      thumb_url: null,
+      width: 1,
+      height: 1,
+      file_size: 999,
+      hash: "x",
+      has_watermark: false,
+      uploaded_by: uploader.id,
     });
     const got = await adminFindMediaById(created.id);
     expect(got!.original_url).toBe("ORIG");

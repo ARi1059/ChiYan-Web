@@ -185,12 +185,8 @@ app.post(
     // 没走 PUT 处理管线（meta 为 EMPTY）时退化：url=original_url，thumb=null
     const base = c.env.API_PUBLIC_URL.replace(/\/+$/, "");
     const url = `${base}/media/${input.object_key}`;
-    const original_url = meta.thumbObjectKey
-      ? `${base}/media/originals/${input.object_key}`
-      : url;
-    const thumb_url = meta.thumbObjectKey
-      ? `${base}/media/${meta.thumbObjectKey}`
-      : null;
+    const original_url = meta.thumbObjectKey ? `${base}/media/originals/${input.object_key}` : url;
+    const thumb_url = meta.thumbObjectKey ? `${base}/media/${meta.thumbObjectKey}` : null;
     try {
       const created = await adminCreateMedia({
         model_id: input.model_id ?? null,
@@ -288,9 +284,8 @@ app.delete(
     const { id } = c.req.valid("param");
     const existing = await adminFindMediaById(id);
     if (!existing) return fail(c, 40401, "媒体不存在");
-    const associatedModel = existing.model_id != null
-      ? await adminFindModelById(existing.model_id)
-      : null;
+    const associatedModel =
+      existing.model_id != null ? await adminFindModelById(existing.model_id) : null;
     const deleted = await adminDeleteMedia(id);
     if (!deleted) return fail(c, 40401, "媒体不存在");
     const operator = c.get("admin")!;

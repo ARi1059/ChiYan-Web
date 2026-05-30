@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: '输入 MIGRATE 以确认对 prod 执行迁移'
+        description: "输入 MIGRATE 以确认对 prod 执行迁移"
         required: true
 
 concurrency:

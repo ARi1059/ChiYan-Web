@@ -92,7 +92,9 @@ export async function findById(id: number): Promise<AdminRecord | undefined> {
  * 测试 / seed 用：插入一个 admin。
  * handler 不该直接调它（管理员创建走 /admin/accounts 流程，那里会调 createAdmin）。
  */
-export async function _insertForTests(record: Omit<AdminRecord, "id" | "created_at" | "updated_at">): Promise<AdminRecord> {
+export async function _insertForTests(
+  record: Omit<AdminRecord, "id" | "created_at" | "updated_at">,
+): Promise<AdminRecord> {
   const db = getDb();
   const [row] = await db
     .insert(admins)
@@ -173,7 +175,10 @@ export async function recordPasswordHistory(adminId: number, passwordHash: strin
   await db.insert(adminPasswordHistory).values({ adminId, passwordHash });
 }
 
-export async function getPasswordHistory(adminId: number, limit: number): Promise<PasswordHistoryRecord[]> {
+export async function getPasswordHistory(
+  adminId: number,
+  limit: number,
+): Promise<PasswordHistoryRecord[]> {
   const db = getDb();
   const rows = await db.query.adminPasswordHistory.findMany({
     where: eq(adminPasswordHistory.adminId, adminId),
@@ -198,9 +203,7 @@ export async function _resetAdminRepoForTests(): Promise<void> {
   // CASCADE：清 admins 时会一并清掉引用它的 password_history / media_assets 等。
   // 不在此处 ensureSentinelAdmin：admin-repo 单元测试要从空表起算总数。
   // 同时调 _resetModelsRepoForTests / _resetRostersRepoForTests 的用例会拿到 sentinel。
-  await db.execute(
-    sql`TRUNCATE TABLE admins, admin_password_history RESTART IDENTITY CASCADE`,
-  );
+  await db.execute(sql`TRUNCATE TABLE admins, admin_password_history RESTART IDENTITY CASCADE`);
 }
 
 // ─── 账号管理（§4.7 Owner-only） ──────────────────────────────────────────────
@@ -282,11 +285,7 @@ export async function updateAdminProfile(
   if (patch.display_name !== undefined) set.displayName = patch.display_name;
   if (patch.role !== undefined) set.role = patch.role;
   if (patch.status !== undefined) set.status = patch.status;
-  const [row] = await db
-    .update(admins)
-    .set(set)
-    .where(eq(admins.id, id))
-    .returning();
+  const [row] = await db.update(admins).set(set).where(eq(admins.id, id)).returning();
   return row ? toDomain(row) : undefined;
 }
 
@@ -325,4 +324,3 @@ function isUniqueViolation(e: unknown, constraintName: string): boolean {
   const obj = e as { code?: string; constraint?: string };
   return obj.code === "23505" && obj.constraint === constraintName;
 }
-

@@ -69,10 +69,7 @@ async function tokenFor(adminId: number): Promise<string> {
   );
 }
 
-function makeRequest(
-  path: string,
-  init: RequestInit & { token?: string; csrf?: boolean } = {},
-) {
+function makeRequest(path: string, init: RequestInit & { token?: string; csrf?: boolean } = {}) {
   const headers = new Headers(init.headers);
   headers.set("CF-Connecting-IP", "203.0.113.42");
   headers.set("User-Agent", "vitest");

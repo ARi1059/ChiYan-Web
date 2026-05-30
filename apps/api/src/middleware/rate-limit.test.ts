@@ -5,10 +5,7 @@ import { _resetRateLimitForTests, keyFromIp, rateLimit } from "./rate-limit";
 
 function app() {
   const a = new Hono<AppContext>();
-  a.use(
-    "*",
-    rateLimit({ bucket: "public_ip", windowMs: 60_000, max: 3, key: keyFromIp }),
-  );
+  a.use("*", rateLimit({ bucket: "public_ip", windowMs: 60_000, max: 3, key: keyFromIp }));
   a.get("/ping", (c) => c.json({ ok: true }));
   return a;
 }

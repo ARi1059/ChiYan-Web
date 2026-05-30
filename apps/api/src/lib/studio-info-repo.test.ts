@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  _resetStudioInfoRepoForTests,
-  _setForTests,
-  getSettings,
-} from "./studio-info-repo";
+import { _resetStudioInfoRepoForTests, _setForTests, getSettings } from "./studio-info-repo";
 
 beforeEach(() => _resetStudioInfoRepoForTests());
 

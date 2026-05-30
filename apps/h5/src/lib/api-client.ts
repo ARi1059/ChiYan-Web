@@ -180,9 +180,7 @@ export async function fetchPublicSnapshot(): Promise<PublicSnapshot> {
   ]);
 
   const todayCodes = new Set(todayRes.models.map((m) => m.code));
-  const models = modelsRes.items.map((c) =>
-    toModel(c, todayCodes.has(c.code) ? "在班" : "空闲"),
-  );
+  const models = modelsRes.items.map((c) => toModel(c, todayCodes.has(c.code) ? "在班" : "空闲"));
 
   const settings: SiteSettings = {
     ...DEFAULT_SETTINGS,
@@ -214,11 +212,7 @@ export async function fetchPublicSnapshot(): Promise<PublicSnapshot> {
 // 登录后 AppContext 切到这里：models 同时带 apiId (数字 id) + code + coverAssetId，
 // 使得 mutation 能精确发 PATCH/DELETE /admin/models/:id 而无需公开端反查。
 
-import {
-  fetchAdminModels,
-  fetchAdminRoster,
-  type AdminModelDetail,
-} from "@chiyan/api-client";
+import { fetchAdminModels, fetchAdminRoster, type AdminModelDetail } from "@chiyan/api-client";
 
 /**
  * AdminModelDetail → H5 Model 的纯转换；photo 留空，由 fetchAdminSnapshot 用

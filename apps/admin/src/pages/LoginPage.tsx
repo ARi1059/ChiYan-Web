@@ -25,9 +25,7 @@ function describeError(e: unknown): string {
       const sub = e.extra?.sub_code as string | undefined;
       if (sub === "locked") {
         const until = e.extra?.locked_until as string | undefined;
-        return until
-          ? `账号已锁定，请于 ${new Date(until).toLocaleString()} 后再试`
-          : "账号已锁定";
+        return until ? `账号已锁定，请于 ${new Date(until).toLocaleString()} 后再试` : "账号已锁定";
       }
       if (sub === "account_disabled") return "账号已停用";
       return e.message;

@@ -68,10 +68,7 @@ async function tokenFor(adminId: number): Promise<string> {
   );
 }
 
-function makeRequest(
-  path: string,
-  init: RequestInit & { token?: string; csrf?: boolean } = {},
-) {
+function makeRequest(path: string, init: RequestInit & { token?: string; csrf?: boolean } = {}) {
   const headers = new Headers(init.headers);
   headers.set("CF-Connecting-IP", "203.0.113.42");
   headers.set("User-Agent", "vitest");
@@ -216,10 +213,11 @@ describe("POST /admin/roster/copy", () => {
   it("from 不存在 → 40401", async () => {
     const adminId = await seedAdmin("admin", "admin1");
     const token = await tokenFor(adminId);
-    const res = await makeRequest(
-      "/api/v1/admin/roster/copy?from=2099-01-01&to=2099-01-02",
-      { method: "POST", token, csrf: true },
-    );
+    const res = await makeRequest("/api/v1/admin/roster/copy?from=2099-01-01&to=2099-01-02", {
+      method: "POST",
+      token,
+      csrf: true,
+    });
     expect(res.status).toBe(404);
   });
 
@@ -233,10 +231,11 @@ describe("POST /admin/roster/copy", () => {
       csrf: true,
       body: JSON.stringify({ date: "2026-06-10", model_ids: [modelId], note: "源" }),
     });
-    const res = await makeRequest(
-      "/api/v1/admin/roster/copy?from=2026-06-10&to=2026-06-11",
-      { method: "POST", token, csrf: true },
-    );
+    const res = await makeRequest("/api/v1/admin/roster/copy?from=2026-06-10&to=2026-06-11", {
+      method: "POST",
+      token,
+      csrf: true,
+    });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { data: { date: string; model_ids: number[] } };
     expect(body.data.date).toBe("2026-06-11");
@@ -290,17 +289,12 @@ describe("DELETE /admin/roster + history", () => {
         body: JSON.stringify({ date, model_ids: [modelId] }),
       });
     }
-    const res = await makeRequest(
-      "/api/v1/admin/roster/history?from=2026-08-01&to=2026-08-03",
-      { token },
-    );
+    const res = await makeRequest("/api/v1/admin/roster/history?from=2026-08-01&to=2026-08-03", {
+      token,
+    });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { data: { items: { date: string }[] } };
-    expect(body.data.items.map((i) => i.date)).toEqual([
-      "2026-08-01",
-      "2026-08-02",
-      "2026-08-03",
-    ]);
+    expect(body.data.items.map((i) => i.date)).toEqual(["2026-08-01", "2026-08-02", "2026-08-03"]);
   });
 });
 
@@ -600,7 +594,9 @@ describe("PATCH /admin/media/:id (is_cover 同步)", () => {
       csrf: true,
       body: JSON.stringify(registerBody(key, { model_id: modelId })),
     });
-    const { data: { id: mediaId } } = (await reg.json()) as { data: { id: number } };
+    const {
+      data: { id: mediaId },
+    } = (await reg.json()) as { data: { id: number } };
 
     const patch = await makeRequest(`/api/v1/admin/media/${mediaId}`, {
       method: "PATCH",
@@ -627,7 +623,9 @@ describe("PATCH /admin/media/:id (is_cover 同步)", () => {
       csrf: true,
       body: JSON.stringify(registerBody(key, { model_id: modelId })),
     });
-    const { data: { id: mediaId } } = (await reg.json()) as { data: { id: number } };
+    const {
+      data: { id: mediaId },
+    } = (await reg.json()) as { data: { id: number } };
     await makeRequest(`/api/v1/admin/media/${mediaId}`, {
       method: "PATCH",
       token,
@@ -657,7 +655,9 @@ describe("POST /admin/media/:id/watermark", () => {
       csrf: true,
       body: JSON.stringify(registerBody(key)),
     });
-    const { data: { id: mediaId } } = (await reg.json()) as { data: { id: number } };
+    const {
+      data: { id: mediaId },
+    } = (await reg.json()) as { data: { id: number } };
     const wm = await makeRequest(`/api/v1/admin/media/${mediaId}/watermark`, {
       method: "POST",
       token,
@@ -680,7 +680,9 @@ describe("角色矩阵", () => {
       csrf: true,
       body: JSON.stringify(registerBody(key)),
     });
-    const { data: { id: mediaId } } = (await reg.json()) as { data: { id: number } };
+    const {
+      data: { id: mediaId },
+    } = (await reg.json()) as { data: { id: number } };
 
     const opId = await seedAdmin("operator", "op1");
     const opToken = await tokenFor(opId);

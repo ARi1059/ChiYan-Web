@@ -12,7 +12,11 @@ import { zValidator } from "@hono/zod-validator";
 import { pub as pubTypes } from "@chiyan/types";
 import type { AppContext } from "../../env";
 import { ok } from "../../lib/api";
-import { findActiveByIds, findCoverAndGalleryAssets, type ModelRecord } from "../../lib/models-repo";
+import {
+  findActiveByIds,
+  findCoverAndGalleryAssets,
+  type ModelRecord,
+} from "../../lib/models-repo";
 import { cropMinor } from "../../lib/public-shape";
 import { findByDate } from "../../lib/rosters-repo";
 import { getSettings } from "../../lib/studio-info-repo";

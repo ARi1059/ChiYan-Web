@@ -8,14 +8,7 @@
  *   show("QQ 号已复制");
  *   show("操作过于频繁", { duration: 5000, tone: "warn" });
  */
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
 import { CheckCircle2, AlertTriangle, Info } from "lucide-react";
 
 type ToastTone = "info" | "success" | "warn";

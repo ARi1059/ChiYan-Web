@@ -14,10 +14,7 @@ import track from "./track";
 
 const pub = new Hono<AppContext>();
 
-pub.use(
-  "*",
-  rateLimit({ bucket: "public_ip", windowMs: 60_000, max: 60, key: keyFromIp }),
-);
+pub.use("*", rateLimit({ bucket: "public_ip", windowMs: 60_000, max: 60, key: keyFromIp }));
 
 pub.route("/today", today);
 pub.route("/models", models);

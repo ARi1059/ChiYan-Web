@@ -26,8 +26,7 @@ import { ensureSentinelAdmin } from "./src/lib/sentinel-admin";
 const { Pool } = pg;
 
 const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ??
-  "postgresql://chiyan:dev@127.0.0.1:5432/chiyan_test";
+  process.env.TEST_DATABASE_URL ?? "postgresql://chiyan:dev@127.0.0.1:5432/chiyan_test";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsFolder = resolve(here, "..", "..", "packages", "db", "drizzle");

@@ -24,15 +24,11 @@ export function ModelCard({ model, onClick, compact = false }: ModelCardProps) {
         "relative bg-card rounded-[14px] overflow-hidden text-left block",
         "shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
         "active:scale-[0.97] transition-transform duration-[120ms]",
-        compact ? "w-[140px] flex-shrink-0" : "w-full"
+        compact ? "w-[140px] flex-shrink-0" : "w-full",
       )}
     >
       <div className={cn("relative bg-muted", compact ? "aspect-[2/3]" : "aspect-[3/4]")}>
-        <img
-          src={model.photo}
-          alt={model.alias}
-          className="w-full h-full object-cover"
-        />
+        <img src={model.photo} alt={model.alias} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
         <div className="absolute top-2 right-2">
           <span className={cn("text-[10px] px-2 py-0.5 rounded-full", statusStyles[model.status])}>

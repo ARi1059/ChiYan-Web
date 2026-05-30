@@ -54,7 +54,7 @@ export function TodaySection({ onSelectModel }: TodaySectionProps) {
                 "flex-1 py-1.5 rounded-[8px] text-sm transition-all duration-200",
                 segment === s
                   ? "bg-card text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
-                  : "text-muted-foreground"
+                  : "text-muted-foreground",
               )}
             >
               {s}
@@ -71,7 +71,7 @@ export function TodaySection({ onSelectModel }: TodaySectionProps) {
               "flex-shrink-0 px-3 py-1 rounded-full text-xs border transition-colors duration-150",
               !activeStyle
                 ? "bg-primary text-primary-foreground border-primary"
-                : "bg-card text-foreground border-border"
+                : "bg-card text-foreground border-border",
             )}
           >
             全部风格
@@ -84,7 +84,7 @@ export function TodaySection({ onSelectModel }: TodaySectionProps) {
                 "flex-shrink-0 px-3 py-1 rounded-full text-xs border transition-colors duration-150",
                 activeStyle === s
                   ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-card text-foreground border-border"
+                  : "bg-card text-foreground border-border",
               )}
             >
               {s}
@@ -101,11 +101,7 @@ export function TodaySection({ onSelectModel }: TodaySectionProps) {
       ) : (
         <div className="px-5 grid grid-cols-2 gap-3">
           {filtered.map((model) => (
-            <ModelCard
-              key={model.id}
-              model={model}
-              onClick={() => onSelectModel(model)}
-            />
+            <ModelCard key={model.id} model={model} onClick={() => onSelectModel(model)} />
           ))}
         </div>
       )}

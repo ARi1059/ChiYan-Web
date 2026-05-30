@@ -4,12 +4,7 @@ import { useApp } from "../store/AppContext";
 import { useToast } from "./ToastProvider";
 import { WechatHintSheet } from "./WechatHintSheet";
 import { LargeTitleHeader } from "./LargeTitleHeader";
-import {
-  buildContactMessage,
-  checkRateLimit,
-  copyAndContactQQ,
-  detectQQContext,
-} from "../lib/qq";
+import { buildContactMessage, checkRateLimit, copyAndContactQQ, detectQQContext } from "../lib/qq";
 import { cn } from "./ui/utils";
 
 export function ContactSection() {
@@ -48,10 +43,9 @@ export function ContactSection() {
     const message = buildContactMessage(settings.agencyName, settings.agencyQQ);
     const r = copyAndContactQQ(settings.agencyQQ, message);
     if (r.copied) {
-      toast.show(
-        ctx === "pc" ? "QQ 号已复制，已新窗口打开" : "QQ 号已复制，正在打开 QQ…",
-        { tone: "success" },
-      );
+      toast.show(ctx === "pc" ? "QQ 号已复制，已新窗口打开" : "QQ 号已复制，正在打开 QQ…", {
+        tone: "success",
+      });
     } else {
       toast.show("复制失败，请长按 QQ 号手动复制", { tone: "warn" });
     }
@@ -88,7 +82,7 @@ export function ContactSection() {
                 "flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-[10px] text-sm border transition-colors duration-200",
                 copiedQQ
                   ? "bg-secondary text-primary border-primary/20"
-                  : "bg-card text-foreground border-border"
+                  : "bg-card text-foreground border-border",
               )}
             >
               {copiedQQ ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
@@ -126,7 +120,7 @@ export function ContactSection() {
                 "w-full flex items-center justify-center gap-1.5 py-2.5 rounded-[10px] text-sm border transition-colors duration-200",
                 copiedGroup
                   ? "bg-secondary text-primary border-primary/20"
-                  : "bg-card text-foreground border-border"
+                  : "bg-card text-foreground border-border",
               )}
             >
               {copiedGroup ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}

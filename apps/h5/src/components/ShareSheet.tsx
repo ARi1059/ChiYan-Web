@@ -103,8 +103,8 @@ export function ShareSheet({ open, intent, onClose, onCopied }: Props) {
           {ctx === "wechat" && (
             <div className="mx-4 mb-3 rounded-[12px] border border-border/60 bg-secondary/40 px-3 py-2.5">
               <p className="text-xs text-muted-foreground leading-relaxed">
-                微信内复制链接后，点右上角 <span className="font-semibold">···</span>
-                {" "}菜单 → <span className="font-semibold">发送给朋友</span> /{" "}
+                微信内复制链接后，点右上角 <span className="font-semibold">···</span> 菜单 →{" "}
+                <span className="font-semibold">发送给朋友</span> /{" "}
                 <span className="font-semibold">朋友圈</span>，把链接粘贴进对话框即可。
               </p>
             </div>
@@ -145,8 +145,7 @@ export function ShareSheet({ open, intent, onClose, onCopied }: Props) {
                   "active:opacity-80 transition-opacity",
                 )}
               >
-                <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                在 QQ 浏览器中打开
+                <ExternalLink className="w-4 h-4 text-muted-foreground" />在 QQ 浏览器中打开
               </button>
             )}
           </div>

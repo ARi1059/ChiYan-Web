@@ -67,7 +67,9 @@ export const studioSettings = pgTable(
     displayConfig: jsonb("display_config")
       .$type<DisplayConfigValue>()
       .notNull()
-      .default(sql`'{"showBust":true,"showAge":true,"showDistrict":true,"showStyles":true,"showDescription":true,"showQQNumber":false}'::jsonb`),
+      .default(
+        sql`'{"showBust":true,"showAge":true,"showDistrict":true,"showStyles":true,"showDescription":true,"showQQNumber":false}'::jsonb`,
+      ),
     isStudioOpen: boolean("is_studio_open").notNull().default(true),
     resumeAt: timestamp("resume_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })

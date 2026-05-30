@@ -83,13 +83,13 @@ function Toggle({
         onClick={() => onChange(!value)}
         className={cn(
           "w-12 h-6 rounded-full relative transition-colors duration-200 flex-shrink-0",
-          value ? "bg-primary" : "bg-secondary"
+          value ? "bg-primary" : "bg-secondary",
         )}
       >
         <span
           className={cn(
             "absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200",
-            value ? "translate-x-7" : "translate-x-1"
+            value ? "translate-x-7" : "translate-x-1",
           )}
         />
       </button>
@@ -137,7 +137,9 @@ export function SettingsTab() {
         <TextField
           label="营业时间"
           value={settings.businessHours}
-          onChange={() => { /* read-only：见 hint */ }}
+          onChange={() => {
+            /* read-only：见 hint */
+          }}
           placeholder="每日 10:00 – 22:00"
           readOnly
           hint="营业时间结构（工作日/周末）目前需要从后台其他入口配置，此处仅展示"

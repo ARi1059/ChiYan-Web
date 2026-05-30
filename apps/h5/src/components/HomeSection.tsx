@@ -49,7 +49,12 @@ export function HomeSection({ onSelectModel, onBrandTap }: HomeSectionProps) {
           <div className="flex-1 flex flex-col items-center justify-center py-2">
             <span
               className="text-primary"
-              style={{ fontFamily: "'Noto Serif SC', serif", fontSize: "32px", fontWeight: 700, lineHeight: 1 }}
+              style={{
+                fontFamily: "'Noto Serif SC', serif",
+                fontSize: "32px",
+                fontWeight: 700,
+                lineHeight: 1,
+              }}
             >
               {studioOpen ? todayActive.length : "—"}
             </span>
@@ -116,11 +121,7 @@ export function HomeSection({ onSelectModel, onBrandTap }: HomeSectionProps) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             {featured.map((model) => (
-              <ModelCard
-                key={model.id}
-                model={model}
-                onClick={() => onSelectModel(model)}
-              />
+              <ModelCard key={model.id} model={model} onClick={() => onSelectModel(model)} />
             ))}
           </div>
         </div>

@@ -84,7 +84,7 @@ describe("cropMinor", () => {
     expect(json).not.toContain("weight_kg");
     expect(json).not.toContain("bust");
     expect(json).not.toContain("waist");
-    expect(json).not.toContain("\"hip\"");
+    expect(json).not.toContain('"hip"');
     expect(json).not.toContain("shoe_size_eu");
   });
 });

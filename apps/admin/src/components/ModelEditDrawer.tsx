@@ -289,14 +289,7 @@ interface Props {
   onSaved: () => void;
 }
 
-export function ModelEditDrawer({
-  open,
-  mode,
-  initial,
-  accessToken,
-  onClose,
-  onSaved,
-}: Props) {
+export function ModelEditDrawer({ open, mode, initial, accessToken, onClose, onSaved }: Props) {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [snapshot, setSnapshot] = useState<FormState>(EMPTY);
   const [saving, setSaving] = useState(false);
@@ -358,15 +351,10 @@ export function ModelEditDrawer({
 
   return (
     <div className="fixed inset-0 z-30">
-      <div
-        className="absolute inset-0 bg-black/30"
-        onClick={() => (saving ? null : onClose())}
-      />
+      <div className="absolute inset-0 bg-black/30" onClick={() => (saving ? null : onClose())} />
       <aside className="absolute top-0 right-0 h-full w-[480px] bg-[var(--card)] shadow-xl flex flex-col">
         <header className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-          <h3 className="text-base font-semibold">
-            {mode === "new" ? "新增模特" : "编辑模特"}
-          </h3>
+          <h3 className="text-base font-semibold">{mode === "new" ? "新增模特" : "编辑模特"}</h3>
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
@@ -444,7 +432,11 @@ export function ModelEditDrawer({
                 <Input type="number" value={form.hip} onChange={(v) => set("hip", v)} />
               </Field>
               <Field label="鞋码 (EU)">
-                <Input type="number" value={form.shoe_size_eu} onChange={(v) => set("shoe_size_eu", v)} />
+                <Input
+                  type="number"
+                  value={form.shoe_size_eu}
+                  onChange={(v) => set("shoe_size_eu", v)}
+                />
               </Field>
               <Field label="年龄">
                 <Input type="number" value={form.age} onChange={(v) => set("age", v)} />

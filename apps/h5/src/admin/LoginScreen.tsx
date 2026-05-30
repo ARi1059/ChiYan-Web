@@ -169,9 +169,7 @@ export function LoginScreen({ onSuccess }: LoginScreenProps) {
         >
           {busy ? "登录中…" : "下一步"}
         </button>
-        <p className="text-[11px] text-muted-foreground text-center mt-1">
-          密码长度至少 12 位
-        </p>
+        <p className="text-[11px] text-muted-foreground text-center mt-1">密码长度至少 12 位</p>
       </form>
     </div>
   );

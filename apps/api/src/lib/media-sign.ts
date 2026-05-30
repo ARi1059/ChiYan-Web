@@ -70,7 +70,13 @@ function extOf(filename: string): string {
   const dot = filename.lastIndexOf(".");
   if (dot < 0 || dot === filename.length - 1) return "bin";
   // 过滤非字母数字字符防注入到 object_key
-  return filename.slice(dot + 1).replace(/[^a-zA-Z0-9]/g, "").toLowerCase().slice(0, 8) || "bin";
+  return (
+    filename
+      .slice(dot + 1)
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .toLowerCase()
+      .slice(0, 8) || "bin"
+  );
 }
 
 function yyyyMm(d: Date): string {
@@ -137,7 +143,10 @@ export interface SignMediaUploadInput {
   content_type: string;
 }
 
-export async function signMediaUpload(env: Env, input: SignMediaUploadInput): Promise<MediaSignResult> {
+export async function signMediaUpload(
+  env: Env,
+  input: SignMediaUploadInput,
+): Promise<MediaSignResult> {
   const now = new Date();
   const expires_at = new Date(now.getTime() + SIGN_TTL_MS);
   const object_key = `media/${yyyyMm(now)}/${nanoid(10)}.${extOf(input.filename)}`;

@@ -63,61 +63,53 @@ function summarize(a: AdminRecord) {
 }
 
 // ─── GET / 列表 ─────────────────────────────────────────────
-app.get(
-  "/",
-  zValidator("query", adminTypes.AdminAccountsListQuery),
-  async (c) => {
-    const { page, page_size } = c.req.valid("query");
-    const { items, total } = await listAccounts({ page, page_size });
-    return ok(c, {
-      items: items.map(summarize),
-      total,
-      page,
-      page_size,
-    });
-  },
-);
+app.get("/", zValidator("query", adminTypes.AdminAccountsListQuery), async (c) => {
+  const { page, page_size } = c.req.valid("query");
+  const { items, total } = await listAccounts({ page, page_size });
+  return ok(c, {
+    items: items.map(summarize),
+    total,
+    page,
+    page_size,
+  });
+});
 
 // ─── POST / 新建 ────────────────────────────────────────────
-app.post(
-  "/",
-  zValidator("json", adminTypes.AdminCreateAccountRequest),
-  async (c) => {
-    const input = c.req.valid("json");
-    const oneTime = generateOneTimePassword();
-    const password_hash = await hashPassword(oneTime);
-    let created: AdminRecord;
-    try {
-      created = await createAdmin({
-        username: input.username,
-        display_name: input.display_name,
-        role: input.role,
-        password_hash,
-      });
-    } catch (e) {
-      if (e instanceof AdminRepoConflictError) {
-        return fail(c, 40901, "用户名已存在", { sub_code: "username_conflict" });
-      }
-      throw e;
+app.post("/", zValidator("json", adminTypes.AdminCreateAccountRequest), async (c) => {
+  const input = c.req.valid("json");
+  const oneTime = generateOneTimePassword();
+  const password_hash = await hashPassword(oneTime);
+  let created: AdminRecord;
+  try {
+    created = await createAdmin({
+      username: input.username,
+      display_name: input.display_name,
+      role: input.role,
+      password_hash,
+    });
+  } catch (e) {
+    if (e instanceof AdminRepoConflictError) {
+      return fail(c, 40901, "用户名已存在", { sub_code: "username_conflict" });
     }
-    await recordPasswordHistory(created.id, password_hash);
-    const operator = c.get("admin")!;
-    await writeAudit({
-      admin_id: operator.admin_id,
-      action: "admin.account.created",
-      target_type: "admin",
-      target_id: String(created.id),
-      // 只放非敏感元数据；one_time_password 不能落 audit
-      payload: { username: created.username, role: created.role },
-      ip: c.req.header("CF-Connecting-IP") ?? null,
-      ua: c.req.header("User-Agent") ?? null,
-    });
-    return ok(c, {
-      account: summarize(created),
-      one_time_password: oneTime,
-    });
-  },
-);
+    throw e;
+  }
+  await recordPasswordHistory(created.id, password_hash);
+  const operator = c.get("admin")!;
+  await writeAudit({
+    admin_id: operator.admin_id,
+    action: "admin.account.created",
+    target_type: "admin",
+    target_id: String(created.id),
+    // 只放非敏感元数据；one_time_password 不能落 audit
+    payload: { username: created.username, role: created.role },
+    ip: c.req.header("CF-Connecting-IP") ?? null,
+    ua: c.req.header("User-Agent") ?? null,
+  });
+  return ok(c, {
+    account: summarize(created),
+    one_time_password: oneTime,
+  });
+});
 
 // ─── PATCH /:id 修改 profile ────────────────────────────────
 app.patch(

@@ -13,7 +13,9 @@ import {
 } from "./admin-repo";
 import type { AdminRecord } from "./admin-repo";
 
-function seedRecord(over: Partial<AdminRecord> = {}): Omit<AdminRecord, "id" | "created_at" | "updated_at"> {
+function seedRecord(
+  over: Partial<AdminRecord> = {},
+): Omit<AdminRecord, "id" | "created_at" | "updated_at"> {
   return {
     username: "owner",
     display_name: "Owner",

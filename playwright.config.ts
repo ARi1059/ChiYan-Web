@@ -22,8 +22,7 @@ const SHARED_ENV = {
   PORT: "3000",
   ALLOWED_ORIGINS: '["http://localhost:5173"]',
   DATABASE_URL:
-    process.env.E2E_DATABASE_URL ??
-    "postgresql://chiyan:dev@127.0.0.1:5432/chiyan_test",
+    process.env.E2E_DATABASE_URL ?? "postgresql://chiyan:dev@127.0.0.1:5432/chiyan_test",
   REDIS_URL: process.env.E2E_REDIS_URL ?? "redis://127.0.0.1:6379",
   MEDIA_ROOT: "/tmp/chiyan-e2e-media",
   API_PUBLIC_URL: "http://localhost:3000",

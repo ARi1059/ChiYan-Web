@@ -15,10 +15,7 @@ export function RosterSection({ onSelectModel }: RosterSectionProps) {
   const [query, setQuery] = useState("");
   const [activeDistrict, setActiveDistrict] = useState<string | null>(null);
 
-  const districts = useMemo(
-    () => Array.from(new Set(models.map((m) => m.district))),
-    [models]
-  );
+  const districts = useMemo(() => Array.from(new Set(models.map((m) => m.district))), [models]);
 
   const filtered = useMemo(() => {
     return models.filter((m) => {
@@ -63,7 +60,7 @@ export function RosterSection({ onSelectModel }: RosterSectionProps) {
               "flex-shrink-0 px-3 py-1 rounded-full text-xs border transition-colors duration-150",
               !activeDistrict
                 ? "bg-primary text-primary-foreground border-primary"
-                : "bg-card text-foreground border-border"
+                : "bg-card text-foreground border-border",
             )}
           >
             全部区域
@@ -76,7 +73,7 @@ export function RosterSection({ onSelectModel }: RosterSectionProps) {
                 "flex-shrink-0 px-3 py-1 rounded-full text-xs border transition-colors duration-150",
                 activeDistrict === d
                   ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-card text-foreground border-border"
+                  : "bg-card text-foreground border-border",
               )}
             >
               {d}
@@ -90,7 +87,10 @@ export function RosterSection({ onSelectModel }: RosterSectionProps) {
           <span className="text-4xl mb-3">🔍</span>
           <p className="text-sm">未找到匹配的模特</p>
           <button
-            onClick={() => { setQuery(""); setActiveDistrict(null); }}
+            onClick={() => {
+              setQuery("");
+              setActiveDistrict(null);
+            }}
             className="mt-3 text-xs text-primary"
           >
             清除筛选
@@ -99,11 +99,7 @@ export function RosterSection({ onSelectModel }: RosterSectionProps) {
       ) : (
         <div className="px-5 grid grid-cols-2 gap-3">
           {filtered.map((model) => (
-            <ModelCard
-              key={model.id}
-              model={model}
-              onClick={() => onSelectModel(model)}
-            />
+            <ModelCard key={model.id} model={model} onClick={() => onSelectModel(model)} />
           ))}
         </div>
       )}
