@@ -217,7 +217,7 @@ Motion:
 4. Roster Section（搜索 + Segmented + 网格）
 5. Model Detail Sheet（轮播 + 档案 + CTA）
 6. Share Sheet（自绘底部 Sheet）
-7. Browser Switch Hint Card（不受支持浏览器 / 微信内嵌引导卡：「请在 Safari / Chrome / QQ 中打开」）
+7. QQ Hint Card（微信内引导卡）
 8. Contact Block
 
 ### 4.4 规范
@@ -239,7 +239,7 @@ Motion:
 | 03-Roster | Default · Searching · NoResult | 3 |
 | 04-Contact | Default | 1 |
 | 05-Detail | Sheet Medium · Sheet Large · Loading · Empty | 4 |
-| 06-Share | iOS Native · QQ JSAPI · Fallback Sheet | 3 |
+| 06-Share | iOS Native · Wechat JSSDK · QQ JSAPI · Fallback Sheet | 4 |
 | 07-QQ | Toast Success · Hint Card · Open QQ App · Failure | 4 |
 | 08-Topnav 滚动态 | Large → Compact 过渡帧 | 2 |
 | **小计** | | **26** |

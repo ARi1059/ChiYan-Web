@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Drawer } from "vaul";
-import { X, Copy, MessageCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, Copy, MessageCircle, ChevronLeft, ChevronRight, CheckCircle } from "lucide-react";
 import { cn } from "./ui/utils";
+import { useApp } from "../store/AppContext";
 import type { Model } from "../data/models";
 
 interface ModelDetailSheetProps {
@@ -19,6 +20,7 @@ function StatItem({ label, value }: { label: string; value: string }) {
 }
 
 export function ModelDetailSheet({ model, onClose }: ModelDetailSheetProps) {
+  const { display, settings } = useApp();
   const [photoIndex, setPhotoIndex] = useState(0);
   const [copied, setCopied] = useState(false);
 
@@ -35,6 +37,13 @@ export function ModelDetailSheet({ model, onClose }: ModelDetailSheetProps) {
   };
 
   if (!model) return null;
+
+  const visibleStats: { label: string; value: string }[] = [
+    { label: "身高", value: `${model.height}cm` },
+    { label: "体重", value: `${model.weight}kg` },
+    ...(display.showBust ? [{ label: "胸围", value: `${model.bust}cm` }] : []),
+    ...(display.showAge ? [{ label: "年龄", value: `${model.age}岁` }] : []),
+  ];
 
   return (
     <Drawer.Root open={!!model} onOpenChange={(open) => !open && onClose()}>
@@ -53,7 +62,10 @@ export function ModelDetailSheet({ model, onClose }: ModelDetailSheetProps) {
           </div>
 
           <div className="flex items-center justify-between px-4 py-2">
-            <h2 className="font-semibold text-foreground" style={{ fontFamily: "'Noto Serif SC', serif" }}>
+            <h2
+              className="text-foreground"
+              style={{ fontFamily: "'Noto Serif SC', serif", fontSize: "18px", fontWeight: 600 }}
+            >
               {model.alias}
             </h2>
             <button
@@ -67,11 +79,11 @@ export function ModelDetailSheet({ model, onClose }: ModelDetailSheetProps) {
           <div className="overflow-y-auto flex-1">
             <div className="relative aspect-[3/4] bg-muted mx-4 rounded-[14px] overflow-hidden">
               <img
-                src={model.photos[photoIndex] || model.photo}
+                src={(model.photos && model.photos[photoIndex]) || model.photo}
                 alt={model.alias}
                 className="w-full h-full object-cover"
               />
-              {model.photos.length > 1 && (
+              {model.photos && model.photos.length > 1 && (
                 <>
                   <button
                     onClick={() => setPhotoIndex((i) => Math.max(0, i - 1))}
@@ -103,7 +115,7 @@ export function ModelDetailSheet({ model, onClose }: ModelDetailSheetProps) {
             </div>
 
             <div className="mx-4 mt-4">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <span
                   className={cn(
                     "text-xs px-2.5 py-1 rounded-full",
@@ -116,26 +128,42 @@ export function ModelDetailSheet({ model, onClose }: ModelDetailSheetProps) {
                 >
                   {model.status}
                 </span>
-                <span className="text-xs text-muted-foreground">{model.location}</span>
-                <div className="flex gap-1 ml-auto">
-                  {model.styles.map((s) => (
-                    <span key={s} className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
-                      {s}
-                    </span>
+                {display.showDistrict && (
+                  <span className="text-xs text-muted-foreground">成都 · {model.district}</span>
+                )}
+                {display.showQQNumber && (
+                  <span className="text-xs text-muted-foreground font-mono">{model.qqNumber}</span>
+                )}
+                {display.showStyles && (
+                  <div className="flex gap-1 flex-wrap">
+                    {model.styles.map((s) => (
+                      <span key={s} className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {visibleStats.length > 0 && (
+                <div
+                  className={cn(
+                    "bg-secondary rounded-[12px] p-4 mb-4",
+                    `grid gap-3`,
+                  )}
+                  style={{ gridTemplateColumns: `repeat(${visibleStats.length}, 1fr)` }}
+                >
+                  {visibleStats.map((s) => (
+                    <StatItem key={s.label} label={s.label} value={s.value} />
                   ))}
                 </div>
-              </div>
+              )}
 
-              <div className="bg-secondary rounded-[12px] p-4 grid grid-cols-4 gap-3 mb-4">
-                <StatItem label="身高" value={`${model.height}cm`} />
-                <StatItem label="体重" value={`${model.weight}kg`} />
-                <StatItem label="三围" value={`${model.bust}/${model.waist}/${model.hip}`} />
-                <StatItem label="鞋码" value={`${model.shoeSize}`} />
-              </div>
-
-              <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-                {model.description}
-              </p>
+              {display.showDescription && model.description && (
+                <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+                  {model.description}
+                </p>
+              )}
             </div>
           </div>
 
@@ -148,8 +176,8 @@ export function ModelDetailSheet({ model, onClose }: ModelDetailSheetProps) {
                 copied ? "bg-secondary text-primary" : "bg-card text-foreground"
               )}
             >
-              <Copy className="w-4 h-4" />
-              {copied ? "已复制 QQ" : `复制 QQ`}
+              {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied ? "已复制 QQ" : "复制 QQ"}
             </button>
             <button
               onClick={handleOpenQQ}

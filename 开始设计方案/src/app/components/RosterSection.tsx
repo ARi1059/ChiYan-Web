@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Search, X } from "lucide-react";
 import { ModelCard } from "./ModelCard";
-import { MODELS } from "../data/models";
+import { useApp } from "../store/AppContext";
 import { cn } from "./ui/utils";
 import type { Model } from "../data/models";
 
@@ -10,23 +10,27 @@ interface RosterSectionProps {
 }
 
 export function RosterSection({ onSelectModel }: RosterSectionProps) {
+  const { models } = useApp();
   const [query, setQuery] = useState("");
-  const [activeLocation, setActiveLocation] = useState<string | null>(null);
+  const [activeDistrict, setActiveDistrict] = useState<string | null>(null);
+
+  const districts = useMemo(
+    () => Array.from(new Set(models.map((m) => m.district))),
+    [models]
+  );
 
   const filtered = useMemo(() => {
-    return MODELS.filter((m) => {
+    return models.filter((m) => {
       const q = query.trim().toLowerCase();
       const matchQ =
         !q ||
         m.alias.toLowerCase().includes(q) ||
         m.styles.some((s) => s.includes(q)) ||
-        m.location.includes(q);
-      const matchLoc = !activeLocation || m.location === activeLocation;
-      return matchQ && matchLoc;
+        m.district.includes(q);
+      const matchDistrict = !activeDistrict || m.district === activeDistrict;
+      return matchQ && matchDistrict;
     });
-  }, [query, activeLocation]);
-
-  const locations = Array.from(new Set(MODELS.map((m) => m.location)));
+  }, [query, activeDistrict, models]);
 
   return (
     <div className="min-h-full pb-4">
@@ -37,7 +41,7 @@ export function RosterSection({ onSelectModel }: RosterSectionProps) {
         >
           全部模特
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">共 {MODELS.length} 位</p>
+        <p className="text-sm text-muted-foreground mt-1">共 {models.length} 位</p>
       </div>
 
       <div className="px-5 mb-3">
@@ -47,7 +51,7 @@ export function RosterSection({ onSelectModel }: RosterSectionProps) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索化名、风格、城市…"
+            placeholder="搜索化名、风格、区域…"
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
           />
           {query && (
@@ -58,40 +62,42 @@ export function RosterSection({ onSelectModel }: RosterSectionProps) {
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto px-5 pb-3 scrollbar-none">
-        <button
-          onClick={() => setActiveLocation(null)}
-          className={cn(
-            "flex-shrink-0 px-3 py-1 rounded-full text-xs border transition-colors duration-150",
-            !activeLocation
-              ? "bg-primary text-primary-foreground border-primary"
-              : "bg-card text-foreground border-border"
-          )}
-        >
-          全部城市
-        </button>
-        {locations.map((loc) => (
+      {districts.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto px-5 pb-3 scrollbar-none">
           <button
-            key={loc}
-            onClick={() => setActiveLocation(activeLocation === loc ? null : loc)}
+            onClick={() => setActiveDistrict(null)}
             className={cn(
               "flex-shrink-0 px-3 py-1 rounded-full text-xs border transition-colors duration-150",
-              activeLocation === loc
+              !activeDistrict
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-card text-foreground border-border"
             )}
           >
-            {loc}
+            全部区域
           </button>
-        ))}
-      </div>
+          {districts.map((d) => (
+            <button
+              key={d}
+              onClick={() => setActiveDistrict(activeDistrict === d ? null : d)}
+              className={cn(
+                "flex-shrink-0 px-3 py-1 rounded-full text-xs border transition-colors duration-150",
+                activeDistrict === d
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-card text-foreground border-border"
+              )}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           <span className="text-4xl mb-3">🔍</span>
           <p className="text-sm">未找到匹配的模特</p>
           <button
-            onClick={() => { setQuery(""); setActiveLocation(null); }}
+            onClick={() => { setQuery(""); setActiveDistrict(null); }}
             className="mt-3 text-xs text-primary"
           >
             清除筛选

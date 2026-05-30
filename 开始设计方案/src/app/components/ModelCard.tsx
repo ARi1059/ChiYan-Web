@@ -1,4 +1,5 @@
 import { cn } from "./ui/utils";
+import { useApp } from "../store/AppContext";
 import type { Model } from "../data/models";
 
 interface ModelCardProps {
@@ -8,12 +9,14 @@ interface ModelCardProps {
 }
 
 const statusStyles: Record<Model["status"], string> = {
-  "在班": "bg-emerald-50 text-emerald-700",
-  "空闲": "bg-amber-50 text-amber-700",
-  "休息": "bg-gray-100 text-gray-400",
+  在班: "bg-emerald-50 text-emerald-700",
+  空闲: "bg-amber-50 text-amber-700",
+  休息: "bg-gray-100 text-gray-400",
 };
 
 export function ModelCard({ model, onClick, compact = false }: ModelCardProps) {
+  const { display } = useApp();
+
   return (
     <button
       onClick={onClick}
@@ -39,11 +42,12 @@ export function ModelCard({ model, onClick, compact = false }: ModelCardProps) {
         <div className="absolute bottom-0 left-0 right-0 p-3">
           <p className="text-white font-semibold text-sm leading-tight">{model.alias}</p>
           <p className="text-white/70 text-[11px] mt-0.5">
-            {model.height}cm · {model.location}
+            {model.height}cm
+            {display.showDistrict && ` · ${model.district}`}
           </p>
         </div>
       </div>
-      {!compact && (
+      {!compact && display.showStyles && (
         <div className="px-3 py-2">
           <div className="flex flex-wrap gap-1">
             {model.styles.map((s) => (

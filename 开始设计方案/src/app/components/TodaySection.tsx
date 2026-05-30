@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ModelCard } from "./ModelCard";
-import { MODELS } from "../data/models";
+import { useApp } from "../store/AppContext";
 import { cn } from "./ui/utils";
 import type { Model } from "../data/models";
 
@@ -16,17 +16,16 @@ function formatToday(): string {
   return `${now.getMonth() + 1}月${now.getDate()}日 ${days[now.getDay()]} 通告`;
 }
 
-const TODAY_MODELS = MODELS.filter((m) => m.status !== "休息");
-
 export function TodaySection({ onSelectModel }: TodaySectionProps) {
+  const { models } = useApp();
   const [segment, setSegment] = useState<Segment>("全部");
   const [activeStyle, setActiveStyle] = useState<string | null>(null);
 
-  const styles = Array.from(new Set(TODAY_MODELS.flatMap((m) => m.styles)));
+  const todayModels = models.filter((m) => m.status !== "休息");
+  const allStyles = Array.from(new Set(todayModels.flatMap((m) => m.styles)));
 
-  const filtered = TODAY_MODELS.filter((m) => {
-    const segMatch =
-      segment === "全部" || m.status === segment;
+  const filtered = todayModels.filter((m) => {
+    const segMatch = segment === "全部" || m.status === segment;
     const styleMatch = !activeStyle || m.styles.includes(activeStyle);
     return segMatch && styleMatch;
   });
@@ -62,33 +61,35 @@ export function TodaySection({ onSelectModel }: TodaySectionProps) {
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto px-5 pb-3 scrollbar-none">
-        <button
-          onClick={() => setActiveStyle(null)}
-          className={cn(
-            "flex-shrink-0 px-3 py-1 rounded-full text-xs border transition-colors duration-150",
-            !activeStyle
-              ? "bg-primary text-primary-foreground border-primary"
-              : "bg-card text-foreground border-border"
-          )}
-        >
-          全部风格
-        </button>
-        {styles.map((s) => (
+      {allStyles.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto px-5 pb-3 scrollbar-none">
           <button
-            key={s}
-            onClick={() => setActiveStyle(activeStyle === s ? null : s)}
+            onClick={() => setActiveStyle(null)}
             className={cn(
               "flex-shrink-0 px-3 py-1 rounded-full text-xs border transition-colors duration-150",
-              activeStyle === s
+              !activeStyle
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-card text-foreground border-border"
             )}
           >
-            {s}
+            全部风格
           </button>
-        ))}
-      </div>
+          {allStyles.map((s) => (
+            <button
+              key={s}
+              onClick={() => setActiveStyle(activeStyle === s ? null : s)}
+              className={cn(
+                "flex-shrink-0 px-3 py-1 rounded-full text-xs border transition-colors duration-150",
+                activeStyle === s
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-card text-foreground border-border"
+              )}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
