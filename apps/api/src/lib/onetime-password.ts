@@ -5,7 +5,7 @@
  * 业主把密码读错。生成强度：log2(54^16) ≈ 92 bit，远超 80 bit safety floor。
  *
  * 一次性密码只在 HTTP 响应里返一次明文；落库的是 bcrypt(cost=12) 后的 hash。
- * **绝不放进 audit payload / Sentry / console.log**（sanitize.ts 自动 mask 'one_time_password'
+ * **绝不放进 audit payload / console.log**（sanitize.ts 自动 mask 'one_time_password'
  * 字段名兜底，handler 层也别主动放）。
  */
 

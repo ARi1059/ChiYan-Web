@@ -80,9 +80,8 @@ deploy/
    sudo journalctl -fu chiyan-api      # 看日志确认 listening on :3000
    ```
 
-7. **配每日备份**
+7. **配每日备份**（本地同盘 db dump；⚠ 只防误删 / 逻辑错误，**不防盘损 / VM 丢失**，业主 2026-05-31 已知悉）
    ```bash
-   # rclone config 配 b2 remote 一次
    sudo cp deploy/scripts/chiyan-backup.sh /usr/local/bin/
    sudo chmod 750 /usr/local/bin/chiyan-backup.sh
    sudo chown chiyan:chiyan /usr/local/bin/chiyan-backup.sh

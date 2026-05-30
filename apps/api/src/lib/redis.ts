@@ -124,7 +124,7 @@ export function getRedisClient(): RedisClient | null {
   return sharedClient;
 }
 
-/** store 在 fail-open / fail-closed 降级时统一记录（结构化，便于 journalctl / Sentry 抓）。 */
+/** store 在 fail-open / fail-closed 降级时统一记录（结构化，便于 journalctl 抓）。 */
 export function logRedisError(source: string, err: unknown): void {
   console.error(
     JSON.stringify({

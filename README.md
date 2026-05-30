@@ -134,9 +134,7 @@ pnpm --filter @chiyan/api test
 依赖业主决策（待跟进，见 [docs/开发计划.md §五](./docs/开发计划.md)）：
 
 - 🔴 Cloudflare Origin CA 证书签发（15 年）
-- 🔴 Backblaze B2 桶 + access key（备份目的地）
-- 🔴 Sentry org + DSN（三端共用）
-- 🔴 1Password 共享条目（源 IP / SSH key / secrets.env 模板 / B2 key / Sentry DSN / CF Origin CA 私钥）
+- 🔴 1Password 共享条目（源 IP / SSH key / secrets.env 模板 / CF Origin CA 私钥）
 
 ---
 

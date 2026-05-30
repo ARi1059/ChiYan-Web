@@ -11,9 +11,7 @@
 | 项                            | 用途               | 怎么拿                                                                                                                   |
 | ----------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
 | **Cloudflare Origin CA 证书** | Caddy TLS（15 年） | CF Dashboard → SSL/TLS → Origin Server → Create Certificate；私钥存 1Password，部署时落 `/etc/caddy/cf-origin.{pem,key}` |
-| **Backblaze B2 桶 + appKey**  | 每日备份           | B2 建 bucket `chiyan-backups` + application key；`rclone config` 配 `b2:` remote 用                                      |
-| **Sentry project + DSN**      | 三端监控           | Sentry 建 project，拿 DSN，填 secrets.env                                                                                |
-| **1Password 共享条目**        | 密钥总线           | 源 IP / SSH key / `secrets.env` 模板 / B2 key / Sentry DSN / CF Origin CA 私钥 / DB·Redis 密码                           |
+| **1Password 共享条目**        | 密钥总线           | 源 IP / SSH key / `secrets.env` 模板 / CF Origin CA 私钥 / DB·Redis 密码                                                 |
 | **GitHub repo secrets**       | CI/CD              | 见下表，Settings → Secrets and variables → Actions                                                                       |
 
 GitHub repo secrets：
@@ -65,7 +63,7 @@ sudo chmod 0600 /etc/chiyan/secrets.env
 sudo chown root:chiyan /etc/chiyan/secrets.env
 ```
 
-关键字段：`DATABASE_URL` / `REDIS_URL`（带 requirepass 密码）/ `JWT_SECRET`（`openssl rand -base64 48`）/ `ENC_KEY_V1`（`openssl rand -base64 32`）/ `SENTRY_DSN` / `CF_API_TOKEN` + `CF_ZONE_ID` / `ALLOWED_ORIGINS`（H5 + Admin 两域 JSON 数组）/ `API_PUBLIC_URL`。
+关键字段：`DATABASE_URL` / `REDIS_URL`（带 requirepass 密码）/ `JWT_SECRET`（`openssl rand -base64 48`）/ `ENC_KEY_V1`（`openssl rand -base64 32`）/ `CF_API_TOKEN` + `CF_ZONE_ID` / `ALLOWED_ORIGINS`（H5 + Admin 两域 JSON 数组）/ `API_PUBLIC_URL`。
 
 ---
 
@@ -123,10 +121,11 @@ sudo journalctl -fu chiyan-api            # 应看到 "chiyan-api listening" + "
 
 ---
 
-## 8. 备份 cron
+## 8. 备份 cron（本地同盘）
+
+> ⚠ 本地 db dump 只防误删 / 逻辑错误（可 `pg_restore` 回滚）；**不防盘损 / VM 丢失 / 账号封禁**——备份与原库同生共死，media 未纳入。业主 2026-05-31 知悉并选择此方案。
 
 ```bash
-rclone config                             # 配 b2: remote 一次
 sudo cp deploy/scripts/chiyan-backup.sh /usr/local/bin/
 sudo chmod 750 /usr/local/bin/chiyan-backup.sh
 sudo chown chiyan:chiyan /usr/local/bin/chiyan-backup.sh
@@ -145,7 +144,7 @@ sudo -u chiyan /usr/local/bin/chiyan-backup.sh    # 立即跑一次确认成功
 - [ ] 一次端到端图片上传成功（sharp 处理 + 落盘 + 媒体 serve）
 - [ ] **安全验证**：`curl -I https://<api 域>/media/originals/x` → **404**（原图防护生效，见 media-static.ts）
 - [ ] `noindex` meta + 空 `robots.txt`；Admin 子域 IP 白名单生效
-- [ ] 备份 cron 跑过一次成功；Sentry 收到首条事件
+- [ ] 备份 cron 跑过一次成功（`/var/chiyan/backups/` 下有 `db-*.dump.gz`）
 
 **日常发布**：push `main` → CI 绿 → [deploy.yml](../.github/workflows/deploy.yml) 自动上线（CI 红不部署）；schema 变更走 migrate.yml。
 

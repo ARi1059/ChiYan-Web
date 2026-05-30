@@ -96,8 +96,8 @@ if ! command -v caddy >/dev/null; then
     apt install -y caddy
 fi
 
-echo "==> [10/13] sharp 原生依赖 + 备份工具"
-apt install -y libvips libvips-dev rclone gzip rsync
+echo "==> [10/13] sharp 原生依赖 + 备份/部署工具"
+apt install -y libvips libvips-dev gzip rsync
 
 echo "==> [11/13] 时区 Asia/Hong_Kong"
 timedatectl set-timezone Asia/Hong_Kong || true

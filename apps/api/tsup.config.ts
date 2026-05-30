@@ -8,7 +8,7 @@
  *   plain Node 跑不起来；用 tsup noExternal 把它们打进 dist
  * - native deps 留作 external：pg/bcryptjs/redis/sharp 需要 node_modules 安装
  *   （docs §五 rsync 同时推 node_modules 到 VPS）
- * - sourcemap：上线后 Sentry stack 可解
+ * - sourcemap：上线后线上 stack trace 可反解（排错用）
  * - clean：每次 build 清 dist
  */
 import { defineConfig } from "tsup";
