@@ -12,11 +12,15 @@
     "clean": "rm -rf dist node_modules/.vite"
   },
   "dependencies": {
+    "@chiyan/api-client": "workspace:*",
     "@chiyan/types": "workspace:*",
     "@chiyan/ui": "workspace:*",
+    "@tailwindcss/vite": "^4.1.12",
+    "lucide-react": "^0.487.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^7.1.1"
+    "react-router-dom": "^7.1.1",
+    "tailwindcss": "^4.1.12"
   },
   "devDependencies": {
     "@chiyan/config": "workspace:*",

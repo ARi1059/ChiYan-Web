@@ -1,20 +1,40 @@
-import { Route, Routes } from "react-router-dom";
+/**
+ * Admin 桌面 console 路由表。
+ *
+ * 路由：
+ *   /login        → LoginPage（账密 → TOTP 两步）
+ *   /models       → 模特列表（默认进站）
+ *   /roster       → 今日名单
+ *   /settings     → 工作室设置
+ *
+ * 鉴权守卫：除 /login 外其他路由要求 useAuth().isAuthed；否则 <Navigate to="/login" replace />。
+ * H5 那边 access_token 内存存；桌面端同样策略 —— 刷新页面会回 /login（与移动端体验一致）。
+ */
+import { Navigate, Route, Routes } from "react-router-dom";
+import { Layout } from "./components/Layout";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { LoginPage } from "./pages/LoginPage";
+import { ModelsPage } from "./pages/ModelsPage";
+import { RosterPage } from "./pages/RosterPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
 export function App() {
   return (
     <Routes>
-      <Route path="/" element={<Placeholder title="ChiYan Admin Console" />} />
-      <Route path="/login" element={<Placeholder title="登录" />} />
-      <Route path="*" element={<Placeholder title="未找到" />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/" element={<Navigate to="/models" replace />} />
+        <Route path="/models" element={<ModelsPage />} />
+        <Route path="/roster" element={<RosterPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
-  );
-}
-
-function Placeholder({ title }: { title: string }) {
-  return (
-    <main className="page">
-      <h1>{title}</h1>
-      <p>Phase 0 占位页。Phase 3 起按设计稿落地。</p>
-    </main>
   );
 }

@@ -1,19 +1,32 @@
-@import "@chiyan/ui/tokens.css";
+@import "tailwindcss";
+
+/* Phase 0 桌面端 admin tokens；Phase 2 起按 Figma 评审替换。 */
+:root {
+  --bg: #f7f7f8;
+  --card: #ffffff;
+  --border: #e6e6ea;
+  --fg: #18181b;
+  --muted: #6b7280;
+  --primary: #18181b;
+  --primary-fg: #ffffff;
+  --accent: #d4af37;
+  --danger: #c1121f;
+}
 
 html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
   padding: 0;
-  background: var(--color-bg);
-  color: var(--color-fg);
+  background: var(--bg);
+  color: var(--fg);
   font-family:
-    -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial,
+    sans-serif;
   font-size: 14px;
   line-height: 1.5;
-}
-
-.page {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 32px;
 }
