@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ModelCard } from "./ModelCard";
+import { LargeTitleHeader } from "./LargeTitleHeader";
 import { useApp } from "../store/AppContext";
 import { cn } from "./ui/utils";
 import type { Model } from "../data/models";
@@ -32,15 +33,7 @@ export function TodaySection({ onSelectModel }: TodaySectionProps) {
 
   return (
     <div className="min-h-full pb-4">
-      <div className="px-5 pt-14 pb-4">
-        <h1
-          className="text-foreground"
-          style={{ fontFamily: "'Noto Serif SC', serif", fontSize: "28px", fontWeight: 700, lineHeight: 1.2 }}
-        >
-          当日通告
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">{formatToday()}</p>
-      </div>
+      <LargeTitleHeader title="当日通告" subline={formatToday()} variant="title-1" />
 
       {!studioOpen && (
         <div className="mx-5 mb-4 bg-amber-50 rounded-[12px] px-4 py-3 border border-amber-200/60">

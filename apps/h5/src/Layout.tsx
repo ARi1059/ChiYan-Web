@@ -47,6 +47,7 @@ export function Layout() {
       <LoadingScreen loading={state.phase === "loading" && models.length === 0} />
 
       <main
+        data-scroll-root
         className="flex-1 overflow-y-auto"
         style={{ WebkitOverflowScrolling: "touch" }}
       >

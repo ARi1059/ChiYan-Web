@@ -1,4 +1,5 @@
 import { ModelCard } from "./ModelCard";
+import { LargeTitleHeader } from "./LargeTitleHeader";
 import { useApp } from "../store/AppContext";
 import type { Model } from "../data/models";
 
@@ -29,17 +30,13 @@ export function HomeSection({ onSelectModel, onBrandTap }: HomeSectionProps) {
 
   return (
     <div className="min-h-full pb-4">
-      <div className="px-5 pt-14 pb-6">
-        <p className="text-muted-foreground text-sm">{formatDate()} · {getTodayGreeting()}</p>
-        <h1
-          className="mt-1 text-foreground cursor-default select-none"
-          style={{ fontFamily: "'Noto Serif SC', serif", fontSize: "34px", fontWeight: 700, lineHeight: 1.2 }}
-          onClick={onBrandTap}
-        >
-          {settings.agencyName}
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">{settings.agencySlogan}</p>
-      </div>
+      <LargeTitleHeader
+        eyebrow={`${formatDate()} · ${getTodayGreeting()}`}
+        title={settings.agencyName}
+        subline={settings.agencySlogan}
+        variant="large"
+        onTitleTap={onBrandTap}
+      />
 
       {settings.noticeEnabled && settings.homeNotice && (
         <div className="mx-5 mb-4 bg-primary/10 rounded-[12px] px-4 py-3">

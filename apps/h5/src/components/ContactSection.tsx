@@ -3,6 +3,7 @@ import { Copy, MessageCircle, Users, Clock, MapPin, CheckCircle } from "lucide-r
 import { useApp } from "../store/AppContext";
 import { useToast } from "./ToastProvider";
 import { WechatHintSheet } from "./WechatHintSheet";
+import { LargeTitleHeader } from "./LargeTitleHeader";
 import {
   buildContactMessage,
   checkRateLimit,
@@ -58,15 +59,11 @@ export function ContactSection() {
 
   return (
     <div className="min-h-full pb-8">
-      <div className="px-5 pt-14 pb-6">
-        <h1
-          className="text-foreground"
-          style={{ fontFamily: "'Noto Serif SC', serif", fontSize: "28px", fontWeight: 700, lineHeight: 1.2 }}
-        >
-          联系我们
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">{settings.agencyName} · {settings.agencySlogan}</p>
-      </div>
+      <LargeTitleHeader
+        title="联系我们"
+        subline={`${settings.agencyName} · ${settings.agencySlogan}`}
+        variant="title-1"
+      />
 
       <div className="px-5 space-y-3">
         <div className="bg-card rounded-[16px] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">

@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Search, X } from "lucide-react";
 import { ModelCard } from "./ModelCard";
+import { LargeTitleHeader } from "./LargeTitleHeader";
 import { useApp } from "../store/AppContext";
 import { cn } from "./ui/utils";
 import type { Model } from "../data/models";
@@ -34,15 +35,7 @@ export function RosterSection({ onSelectModel }: RosterSectionProps) {
 
   return (
     <div className="min-h-full pb-4">
-      <div className="px-5 pt-14 pb-4">
-        <h1
-          className="text-foreground"
-          style={{ fontFamily: "'Noto Serif SC', serif", fontSize: "28px", fontWeight: 700, lineHeight: 1.2 }}
-        >
-          全部模特
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">共 {models.length} 位</p>
-      </div>
+      <LargeTitleHeader title="全部模特" subline={`共 ${models.length} 位`} variant="title-1" />
 
       <div className="px-5 mb-3">
         <div className="flex items-center gap-2 bg-card rounded-[12px] px-3 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
