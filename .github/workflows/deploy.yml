@@ -1,7 +1,8 @@
 name: deploy
 
-# 触发：push to main（CI 通过 → 自动部署），或人工 workflow_dispatch
-# 不接 PR / 不接 tag —— main 是单一真相
+# 触发：CI workflow（.github/workflows/ci.yml，name: CI）在 main 上跑完 → 本 workflow 起；
+# 仅当 CI conclusion==success（见 job if）才真正部署 —— CI 红不会上线坏代码。
+# 也可人工 workflow_dispatch（默认信任，跳过 gate）。不接 PR / 不接 tag —— main 是单一真相。
 #
 # 必需的 repo secrets（Settings → Secrets and variables → Actions）：
 #   DEPLOY_SSH_KEY  —  生产 deploy 用户的 ed25519 私钥（无 passphrase）
@@ -9,7 +10,9 @@ name: deploy
 #   DEPLOY_USER     —  通常是 "deploy"；sudoers 仅授权 systemctl restart chiyan-api + reload caddy
 #   HEALTH_URL      —  https://<your-api-domain>/health（smoke test 用）
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -23,12 +26,16 @@ jobs:
     name: build + rsync + restart
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    # 仅在 CI 通过才跑：依赖同 commit 的 CI workflow run，CI 红就跳过这次
-    # workflow_dispatch 不走这个 gate（人工触发默认信任已绿）
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    # CI workflow 成功后才部署；CI 红时 workflow_run 仍触发但 conclusion!=success → skip。
+    # workflow_dispatch 不走这个 gate（人工触发默认信任已绿）。
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # workflow_run 默认 checkout 默认分支 HEAD；显式取触发 CI 的那个 commit，
+          # 保证部署的正是被 CI 验证过的代码（workflow_dispatch 时回落 github.sha）。
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: pnpm/action-setup@v4
 
@@ -74,7 +81,7 @@ jobs:
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          STAMP: ${{ github.sha }}
+          STAMP: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           # 1. 推 tarball
           scp -i ~/.ssh/id_ed25519 release.tgz \

@@ -35,13 +35,13 @@ if ! grep -q "Ubuntu 24" /etc/os-release; then
     [[ "$ans" == "y" ]] || exit 1
 fi
 
-echo "==> [1/10] apt update + 系统补丁"
+echo "==> [1/13] apt update + 系统补丁"
 apt update && apt upgrade -y
 
-echo "==> [2/10] 基础工具"
+echo "==> [2/13] 基础工具"
 apt install -y curl gnupg2 ca-certificates lsb-release ufw fail2ban unattended-upgrades
 
-echo "==> [3/10] chiyan 用户 + 目录"
+echo "==> [3/13] chiyan 用户 + 目录"
 if ! id -u chiyan >/dev/null 2>&1; then
     adduser --system --group --home /var/chiyan chiyan
 fi
@@ -52,7 +52,7 @@ chmod 750 /var/chiyan /etc/chiyan
 mkdir -p /var/chiyan/media/originals
 chmod 700 /var/chiyan/media/originals
 
-echo "==> [4/10] UFW 防火墙"
+echo "==> [4/13] UFW 防火墙"
 ufw --force default deny incoming
 ufw --force default allow outgoing
 ufw allow 22/tcp
@@ -60,17 +60,17 @@ ufw allow 80/tcp
 ufw allow 443/tcp
 ufw --force enable
 
-echo "==> [5/10] 自动安全更新（仅 security 通道）"
+echo "==> [5/13] 自动安全更新（仅 security 通道）"
 dpkg-reconfigure -plow unattended-upgrades || true
 
-echo "==> [6/10] Node 22 LTS"
+echo "==> [6/13] Node 22 LTS"
 if ! command -v node >/dev/null; then
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
     apt install -y nodejs
 fi
 npm install -g pnpm
 
-echo "==> [7/10] PostgreSQL 16（PGDG 源）"
+echo "==> [7/13] PostgreSQL 16（PGDG 源）"
 if ! command -v psql >/dev/null; then
     install -d /etc/apt/keyrings
     curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
@@ -81,10 +81,10 @@ if ! command -v psql >/dev/null; then
     apt install -y postgresql-16
 fi
 
-echo "==> [8/10] Redis 7"
+echo "==> [8/13] Redis 7"
 apt install -y redis-server
 
-echo "==> [9/10] Caddy 2"
+echo "==> [9/13] Caddy 2"
 if ! command -v caddy >/dev/null; then
     apt install -y debian-keyring debian-archive-keyring apt-transport-https
     install -d /usr/share/keyrings
@@ -96,8 +96,39 @@ if ! command -v caddy >/dev/null; then
     apt install -y caddy
 fi
 
-echo "==> [10/10] sharp 原生依赖 + 备份工具"
+echo "==> [10/13] sharp 原生依赖 + 备份工具"
 apt install -y libvips libvips-dev rclone gzip rsync
+
+echo "==> [11/13] 时区 Asia/Hong_Kong"
+timedatectl set-timezone Asia/Hong_Kong || true
+
+echo "==> [12/13] 2G swap（应急兜底；2GB RAM 是硬上限，正常不触发）"
+if ! swapon --show 2>/dev/null | grep -q '/swapfile'; then
+    fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+echo "==> [13/13] Redis 配置（bind/内存/持久化，对齐 docs/部署架构.md §3.3；requirepass 手动填）"
+REDIS_CONF=/etc/redis/redis.conf
+if [[ -f "$REDIS_CONF" ]] && ! grep -q "# chiyan-config" "$REDIS_CONF"; then
+    cat >> "$REDIS_CONF" <<'REDISEOF'
+
+# ─── chiyan-config（bootstrap 追加，对齐 docs/部署架构.md §3.3）───
+bind 127.0.0.1 -::1
+protected-mode yes
+maxmemory 128mb
+maxmemory-policy allkeys-lru
+save ""
+appendonly yes
+appendfsync everysec
+# requirepass：取消注释并填入 1Password 的 redis 密码，须与 secrets.env 的 REDIS_URL 一致
+# requirepass <redis-password>
+REDISEOF
+    echo "    ⚠ 记得编辑 $REDIS_CONF 设 requirepass（与 secrets.env REDIS_URL 对齐）再 systemctl restart redis-server"
+fi
 
 echo "==> 启 systemd unit"
 systemctl enable --now postgresql redis-server caddy
