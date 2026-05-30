@@ -50,8 +50,11 @@ export const models = pgTable(
     hip: smallint("hip"),
     shoeSizeEu: smallint("shoe_size_eu"),
     ageRange: varchar("age_range", { length: 16 }),
+    age: smallint("age"),
+    qq: varchar("qq", { length: 32 }),
     hometown: varchar("hometown", { length: 32 }),
     city: varchar("city", { length: 32 }),
+    district: varchar("district", { length: 32 }),
     styleTags: jsonb("style_tags")
       .$type<string[]>()
       .notNull()

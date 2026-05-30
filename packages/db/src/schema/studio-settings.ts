@@ -28,6 +28,28 @@ export interface BusinessHoursValue {
   weekends?: { open: string; close: string };
 }
 
+/**
+ * 前端展示开关（H5 ModelCard / DetailSheet 哪些字段显示）。
+ * Admin 在 SettingsTab "前端展示字段" 区块改；全局生效，不分用户。
+ */
+export interface DisplayConfigValue {
+  showBust: boolean;
+  showAge: boolean;
+  showDistrict: boolean;
+  showStyles: boolean;
+  showDescription: boolean;
+  showQQNumber: boolean;
+}
+
+export const DEFAULT_DISPLAY_CONFIG: DisplayConfigValue = {
+  showBust: true,
+  showAge: true,
+  showDistrict: true,
+  showStyles: true,
+  showDescription: true,
+  showQQNumber: false,
+};
+
 export const studioSettings = pgTable(
   "studio_settings",
   {
@@ -36,9 +58,16 @@ export const studioSettings = pgTable(
     tagline: varchar("tagline", { length: 128 }),
     address: varchar("address", { length: 255 }),
     qq: varchar("qq", { length: 32 }).notNull(),
+    qqGroup: varchar("qq_group", { length: 32 }),
     phone: varchar("phone", { length: 32 }),
     about: text("about"),
     businessHours: jsonb("business_hours").$type<BusinessHoursValue>().notNull(),
+    homeNotice: text("home_notice"),
+    noticeEnabled: boolean("notice_enabled").notNull().default(false),
+    displayConfig: jsonb("display_config")
+      .$type<DisplayConfigValue>()
+      .notNull()
+      .default(sql`'{"showBust":true,"showAge":true,"showDistrict":true,"showStyles":true,"showDescription":true,"showQQNumber":false}'::jsonb`),
     isStudioOpen: boolean("is_studio_open").notNull().default(true),
     resumeAt: timestamp("resume_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })

@@ -15,6 +15,13 @@
       "when": 1779984417978,
       "tag": "0001_studio_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780071256003,
+      "tag": "0002_models_qq_age_district_settings_extras",
+      "breakpoints": true
     }
   ]
 }
