@@ -67,9 +67,12 @@ export function GalleryEditor({
   }, [coverAssetId, galleryAssetIds]);
 
   // 拉一次列表把 id → metadata 填进 assetIndex。
-  // 依赖 allIds 变化即重拉 —— 命中已知 id 时还会 PATCH 返回的新 record 同步进来。
+  // 触发：drawer 挂载时 modelId 已确定就拉，不依赖 allIds 是否有内容 ——
+  //   挂载瞬间父级 form 还是 EMPTY，props galleryAssetIds=[]/cover=undefined；
+  //   等父级 useEffect 把 initial 灌进 form 后 props 才到位。若按 allIds 提前 return
+  //   就永远拉不上来。
   useEffect(() => {
-    if (modelId === undefined || allIds.length === 0) {
+    if (modelId === undefined) {
       setAssetIndex(new Map());
       return;
     }
