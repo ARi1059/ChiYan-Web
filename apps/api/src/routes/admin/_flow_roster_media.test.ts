@@ -89,7 +89,7 @@ function makeRequest(
 beforeEach(async () => {
   _resetAdminRepoForTests();
   await _resetModelsRepoForTests();
-  _resetRostersRepoForTests();
+  await _resetRostersRepoForTests();
   _resetMediaSignForTests();
   _resetAuditForTests();
   _resetJtiStoreForTests();

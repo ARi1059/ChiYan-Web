@@ -1,12 +1,20 @@
 /**
- * Daily Roster 仓储 —— 公开读 + 管理写。
+ * Daily Roster 仓储 — drizzle/node-postgres 实现。公开读 + 管理写。
  *
- * Phase 2 mock：date 作主键模拟 unique。
- * 公开域：findByDate（today endpoint 用）。
+ * 公开域：findByDate（GET /public/today 用）。
  * 管理域：upsertRoster / deleteByDate / findByDateRange（PUT/COPY/DELETE/history endpoint 用）。
  *
- * 6 条约定对齐 admin-repo.ts。
+ * 设计点：
+ *  - date 在 schema 上 uniqueIndex；upsert 用 onConflictDoUpdate 走 daily_rosters_date_uniq
+ *  - model_ids 是 jsonb<number[]>；drizzle $type 自动序列化
+ *  - findByDateRange 升序，与现有 history endpoint 契约一致
  */
+
+import { and, asc, between, eq } from "drizzle-orm";
+import { schema } from "@chiyan/db";
+import { getDb } from "./db";
+
+const { dailyRosters } = schema;
 
 export interface RosterRecord {
   id: number;
@@ -18,16 +26,26 @@ export interface RosterRecord {
   updated_at: Date;
 }
 
-const rostersByDate = new Map<string, RosterRecord>();
-let nextRosterId = 1;
+type Row = typeof dailyRosters.$inferSelect;
 
-function clone(r: RosterRecord): RosterRecord {
-  return { ...r, model_ids: [...r.model_ids] };
+function toDomain(r: Row): RosterRecord {
+  return {
+    id: r.id,
+    date: r.date,
+    model_ids: r.modelIds,
+    note: r.note,
+    created_by: r.createdBy,
+    created_at: r.createdAt,
+    updated_at: r.updatedAt,
+  };
 }
 
 export async function findByDate(date: string): Promise<RosterRecord | undefined> {
-  const r = rostersByDate.get(date);
-  return r ? clone(r) : undefined;
+  const db = getDb();
+  const r = await db.query.dailyRosters.findFirst({
+    where: eq(dailyRosters.date, date),
+  });
+  return r ? toDomain(r) : undefined;
 }
 
 export interface UpsertRosterInput {
@@ -38,26 +56,25 @@ export interface UpsertRosterInput {
 }
 
 export async function upsertRoster(input: UpsertRosterInput): Promise<RosterRecord> {
-  const existing = rostersByDate.get(input.date);
-  const now = new Date();
-  const full: RosterRecord = existing
-    ? {
-        ...existing,
-        model_ids: [...input.model_ids],
+  const db = getDb();
+  const [row] = await db
+    .insert(dailyRosters)
+    .values({
+      date: input.date,
+      modelIds: input.model_ids,
+      note: input.note ?? null,
+      createdBy: input.created_by,
+    })
+    .onConflictDoUpdate({
+      target: dailyRosters.date,
+      set: {
+        modelIds: input.model_ids,
         note: input.note ?? null,
-        updated_at: now,
-      }
-    : {
-        id: nextRosterId++,
-        date: input.date,
-        model_ids: [...input.model_ids],
-        note: input.note ?? null,
-        created_by: input.created_by,
-        created_at: now,
-        updated_at: now,
-      };
-  rostersByDate.set(input.date, full);
-  return clone(full);
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+  return toDomain(row!);
 }
 
 /** @deprecated 测试历史用法保留；生产代码请用 upsertRoster。 */
@@ -66,20 +83,24 @@ export async function _upsertRosterForTests(input: UpsertRosterInput): Promise<R
 }
 
 export async function deleteByDate(date: string): Promise<boolean> {
-  return rostersByDate.delete(date);
+  const db = getDb();
+  const out = await db.delete(dailyRosters).where(eq(dailyRosters.date, date)).returning({ id: dailyRosters.id });
+  return out.length > 0;
 }
 
 /** history endpoint 用：返 [from, to] 内全部记录，按日期升序。 */
 export async function findByDateRange(from: string, to: string): Promise<RosterRecord[]> {
-  const out: RosterRecord[] = [];
-  for (const r of rostersByDate.values()) {
-    if (r.date >= from && r.date <= to) out.push(clone(r));
-  }
-  out.sort((a, b) => a.date.localeCompare(b.date));
-  return out;
+  const db = getDb();
+  const rows = await db.query.dailyRosters.findMany({
+    where: and(between(dailyRosters.date, from, to)),
+    orderBy: [asc(dailyRosters.date)],
+  });
+  return rows.map(toDomain);
 }
 
-export function _resetRostersRepoForTests(): void {
-  rostersByDate.clear();
-  nextRosterId = 1;
+export async function _resetRostersRepoForTests(): Promise<void> {
+  // 注意：_resetModelsRepoForTests 已经 TRUNCATE daily_rosters（CASCADE），所以
+  // 当两者按 beforeEach 顺序串行调用时这里是 no-op。单独跑也安全：再 TRUNCATE 一次。
+  const db = getDb();
+  await db.delete(dailyRosters);
 }

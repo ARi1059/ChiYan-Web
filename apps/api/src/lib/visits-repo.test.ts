@@ -1,26 +1,44 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { _insertModelForTests, _resetModelsRepoForTests } from "./models-repo";
 import { _getVisitsForTests, _resetVisitsRepoForTests, recordVisit } from "./visits-repo";
 
-beforeEach(() => _resetVisitsRepoForTests());
+beforeEach(async () => {
+  // models 也 TRUNCATE —— recordVisit 第一条用例传 model_id=1，需要那个 FK target 存在。
+  await _resetModelsRepoForTests();
+  await _resetVisitsRepoForTests();
+});
 
 describe("visits-repo", () => {
   it("recordVisit 返回 id 并落 store", async () => {
+    const m = await _insertModelForTests({
+      code: "M-2026-0001",
+      nickname: "A",
+      status: "active",
+      style_tags: [],
+      available_types: [],
+      can_remote: false,
+      is_minor: false,
+      cover_asset_id: null,
+      gallery_asset_ids: [],
+      portfolio: [],
+      cooperation_history: [],
+    });
     const { id } = await recordVisit({
       path: "/m/M-2026-0001",
       ip_hash: "a".repeat(64),
-      model_id: 1,
+      model_id: m.id,
     });
     expect(id).toBe(1);
-    const all = _getVisitsForTests();
+    const all = await _getVisitsForTests();
     expect(all).toHaveLength(1);
     expect(all[0]!.path).toBe("/m/M-2026-0001");
     expect(all[0]!.ip_hash).toBe("a".repeat(64));
-    expect(all[0]!.model_id).toBe(1);
+    expect(all[0]!.model_id).toBe(m.id);
   });
 
   it("缺省字段 → null（不是 undefined）", async () => {
     await recordVisit({ path: "/" });
-    const v = _getVisitsForTests()[0]!;
+    const v = (await _getVisitsForTests())[0]!;
     expect(v.referrer).toBeNull();
     expect(v.model_id).toBeNull();
     expect(v.ip_hash).toBeNull();
@@ -38,13 +56,13 @@ describe("visits-repo", () => {
   it("created_at 自动落", async () => {
     const t0 = Date.now();
     await recordVisit({ path: "/" });
-    const v = _getVisitsForTests()[0]!;
+    const v = (await _getVisitsForTests())[0]!;
     expect(v.created_at.getTime()).toBeGreaterThanOrEqual(t0);
   });
 
   it("_getVisitsForTests 返回 clone", async () => {
     await recordVisit({ path: "/" });
-    const arr = _getVisitsForTests();
+    const arr = await _getVisitsForTests();
     arr[0]!.path = "hacked";
     arr.push({
       id: 999,
@@ -57,14 +75,14 @@ describe("visits-repo", () => {
       city: null,
       created_at: new Date(),
     });
-    const after = _getVisitsForTests();
+    const after = await _getVisitsForTests();
     expect(after).toHaveLength(1);
     expect(after[0]!.path).toBe("/");
   });
 
   it("_resetVisitsRepoForTests 清空 + 重置 id", async () => {
     await recordVisit({ path: "/" });
-    _resetVisitsRepoForTests();
+    await _resetVisitsRepoForTests();
     const { id } = await recordVisit({ path: "/" });
     expect(id).toBe(1);
   });

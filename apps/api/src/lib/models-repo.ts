@@ -19,6 +19,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { schema } from "@chiyan/db";
 import type { pub } from "@chiyan/types";
 import { getDb } from "./db";
+import { ensureSentinelAdmin } from "./sentinel-admin";
 
 type ImageAsset = pub.ImageAsset;
 
@@ -307,29 +308,6 @@ export async function findCoverAndGalleryAssets(
 }
 
 // ─── 测试 helpers ──────────────────────────────────────────────────
-
-/**
- * sentinel admin 用于 media_assets.uploaded_by 外键。
- * admin-repo 仍是 mock（不写 drizzle admins 表），所以 media insert 时必须
- * 在 drizzle 真表里有至少一个 admin。约定 id=1 永远为 sentinel。
- */
-async function ensureSentinelAdmin(): Promise<void> {
-  const db = getDb();
-  await db
-    .insert(admins)
-    .values({
-      id: 1,
-      username: "__sentinel__",
-      displayName: "sentinel",
-      passwordHash: "$2a$12$" + "x".repeat(53), // 占位 bcrypt 长度，不被消费
-      role: "owner",
-      totpEnrolled: false,
-      mustChangePassword: false,
-      failedLoginCount: 0,
-      status: "active",
-    })
-    .onConflictDoNothing({ target: admins.id });
-}
 
 /**
  * 测试用 insert：按 code upsert（模拟"先种占位 → 再带 cover 重新种"）。

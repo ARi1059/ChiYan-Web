@@ -112,9 +112,9 @@ async function seedModelWithCover(over: Partial<ModelInsert> = {}): Promise<Mode
 
 beforeEach(async () => {
   await _resetModelsRepoForTests();
-  _resetRostersRepoForTests();
+  await _resetRostersRepoForTests();
   await _resetStudioInfoRepoForTests();
-  _resetVisitsRepoForTests();
+  await _resetVisitsRepoForTests();
   _resetRateLimitForTests();
 });
 
@@ -300,7 +300,7 @@ describe("POST /public/track", () => {
     expect(res.headers.get("Cache-Control")).toBe("no-store");
     const body = (await res.json()) as { data: { recorded: boolean } };
     expect(body.data.recorded).toBe(true);
-    const visits = _getVisitsForTests();
+    const visits = await _getVisitsForTests();
     expect(visits).toHaveLength(1);
     expect(visits[0]!.path).toBe("/m/M-2026-0001");
     expect(visits[0]!.ip_hash).toMatch(/^[0-9a-f]{64}$/);
@@ -313,7 +313,7 @@ describe("POST /public/track", () => {
       body: JSON.stringify({ path: "/about" }),
     });
     expect(res.status).toBe(200);
-    const v = _getVisitsForTests()[0]!;
+    const v = (await _getVisitsForTests())[0]!;
     expect(v.model_id).toBeNull();
     expect(v.path).toBe("/about");
   });

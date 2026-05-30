@@ -7,6 +7,8 @@
  *  2. drizzle migrate 到最新版本（幂等，重复跑 no-op）
  *  3. setDb 让 repo 层 getDb() 拿到引用
  *  4. ensureStudioSettingsSeed 兜底（所有 _flow_*.test.ts 都直接消费 settings）
+ *  5. seedSentinelAdmin —— rosters / media / 任何 created_by / uploaded_by = 1 的 FK target；
+ *     _resetModelsRepoForTests 会 TRUNCATE admins 然后自己重种，其它 reset 不动 admins。
  *
  * 串行：vitest.config.ts 配 singleThread:true + isolate:false，避免多 worker 共用同一台 DB 写冲突。
  * 每个测试 beforeEach 调 _resetXxxForTests TRUNCATE，已存在的 hooks 自动适配新实现。
@@ -19,6 +21,7 @@ import pg from "pg";
 import * as schema from "@chiyan/db/schema";
 import { setDb } from "./src/lib/db";
 import { ensureStudioSettingsSeed } from "./src/lib/studio-info-repo";
+import { ensureSentinelAdmin } from "./src/lib/sentinel-admin";
 
 const { Pool } = pg;
 
@@ -35,3 +38,4 @@ const db = drizzle(pool, { schema });
 await migrate(db, { migrationsFolder });
 setDb(db);
 await ensureStudioSettingsSeed();
+await ensureSentinelAdmin();

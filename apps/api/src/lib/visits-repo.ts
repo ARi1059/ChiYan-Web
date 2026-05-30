@@ -1,12 +1,18 @@
 /**
- * Public Visits 仓储（H5 埋点写入）。
+ * Public Visits 仓储 — drizzle/node-postgres 实现（H5 埋点写入）。
  *
- * Phase 2 mock：append-only 数组。
  * 隐私约束：ip_hash 必须是 SHA-256 hex（64 字符），原文 IP 永不入参 —
  * handler 上游先调 ip-hash.ts 转换。
  *
- * 6 条约定对齐 admin-repo.ts。
+ * 写路径：POST /public/track 调 recordVisit；附 Cache-Control: no-store 在 route 层。
+ * 读路径：当前无管理端 endpoint 消费；仅测试通过 _getVisitsForTests 查回核对。
  */
+
+import { asc, sql } from "drizzle-orm";
+import { schema } from "@chiyan/db";
+import { getDb } from "./db";
+
+const { publicVisits } = schema;
 
 export interface VisitRecord {
   id: number;
@@ -20,11 +26,20 @@ export interface VisitRecord {
   created_at: Date;
 }
 
-const visits: VisitRecord[] = [];
-let nextVisitId = 1;
+type Row = typeof publicVisits.$inferSelect;
 
-function clone(v: VisitRecord): VisitRecord {
-  return { ...v };
+function toDomain(r: Row): VisitRecord {
+  return {
+    id: r.id,
+    path: r.path,
+    referrer: r.referrer,
+    model_id: r.modelId,
+    ip_hash: r.ipHash,
+    ua: r.ua,
+    country: r.country,
+    city: r.city,
+    created_at: r.createdAt,
+  };
 }
 
 export async function recordVisit(input: {
@@ -36,26 +51,31 @@ export async function recordVisit(input: {
   country?: string | null;
   city?: string | null;
 }): Promise<{ id: number }> {
-  const v: VisitRecord = {
-    id: nextVisitId++,
-    path: input.path,
-    referrer: input.referrer ?? null,
-    model_id: input.model_id ?? null,
-    ip_hash: input.ip_hash ?? null,
-    ua: input.ua ?? null,
-    country: input.country ?? null,
-    city: input.city ?? null,
-    created_at: new Date(),
-  };
-  visits.push(v);
-  return { id: v.id };
+  const db = getDb();
+  const [row] = await db
+    .insert(publicVisits)
+    .values({
+      path: input.path,
+      referrer: input.referrer ?? null,
+      modelId: input.model_id ?? null,
+      ipHash: input.ip_hash ?? null,
+      ua: input.ua ?? null,
+      country: input.country ?? null,
+      city: input.city ?? null,
+    })
+    .returning({ id: publicVisits.id });
+  return { id: row!.id };
 }
 
-export function _getVisitsForTests(): VisitRecord[] {
-  return visits.map(clone);
+export async function _getVisitsForTests(): Promise<VisitRecord[]> {
+  const db = getDb();
+  const rows = await db.query.publicVisits.findMany({
+    orderBy: [asc(publicVisits.id)],
+  });
+  return rows.map(toDomain);
 }
 
-export function _resetVisitsRepoForTests(): void {
-  visits.length = 0;
-  nextVisitId = 1;
+export async function _resetVisitsRepoForTests(): Promise<void> {
+  const db = getDb();
+  await db.execute(sql`TRUNCATE TABLE public_visits RESTART IDENTITY`);
 }
