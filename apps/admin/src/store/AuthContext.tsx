@@ -10,20 +10,23 @@
  * 阶段 3 只暴露 login/verifyTotp/logout + token 读取；阶段 4 admin 写操作发起请求时
  * 用 useAuth().accessToken 拼 Authorization。
  */
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
-import { login as apiLogin, verifyTotp as apiVerifyTotp } from "@chiyan/api-client";
+  getMe as apiGetMe,
+  login as apiLogin,
+  verifyTotp as apiVerifyTotp,
+  type AdminAccountRole,
+} from "@chiyan/api-client";
 
 interface SessionInfo {
   access_token: string;
   must_change_password: boolean;
   totp_enrolled: boolean;
+  /** 以下由 GET /auth/me 回填，用于按角色做导航显隐；拉取失败时为 undefined（owner-only 入口默认隐藏）。 */
+  admin_id?: number;
+  username?: string;
+  display_name?: string;
+  role?: AdminAccountRole;
 }
 
 interface AuthContextValue {
@@ -57,6 +60,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         must_change_password: res.must_change_password,
         totp_enrolled: res.totp_enrolled,
       };
+      // 回填账号摘要（含 role）做导航显隐；失败不阻断登录（服务端仍会按角色 403 兜底）。
+      try {
+        const me = await apiGetMe(res.access_token);
+        next.admin_id = me.id;
+        next.username = me.username;
+        next.display_name = me.display_name;
+        next.role = me.role;
+      } catch {
+        // 忽略：role 留空，owner-only 入口默认隐藏
+      }
       setSession(next);
       setChallengeToken(null);
       return next;

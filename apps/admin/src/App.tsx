@@ -15,12 +15,23 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { AccountsPage } from "./pages/AccountsPage";
 import { AuditLogsPage } from "./pages/AuditLogsPage";
+import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ModelsPage } from "./pages/ModelsPage";
 import { RosterPage } from "./pages/RosterPage";
 import { SchedulePage } from "./pages/SchedulePage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { useAuth } from "./store/AuthContext";
+
+/** owner/admin 默认进数据看板；operator（看板对其 403）回落到模特管理。role 未知时也回落 /models。 */
+function HomeRedirect() {
+  const { session } = useAuth();
+  const role = session?.role;
+  const to = role === "owner" || role === "admin" ? "/dashboard" : "/models";
+  return <Navigate to={to} replace />;
+}
 
 export function App() {
   return (
@@ -33,11 +44,13 @@ export function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="/" element={<Navigate to="/models" replace />} />
+        <Route path="/" element={<HomeRedirect />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/models" element={<ModelsPage />} />
         <Route path="/roster" element={<RosterPage />} />
         <Route path="/schedule" element={<SchedulePage />} />
         <Route path="/audit-logs" element={<AuditLogsPage />} />
+        <Route path="/accounts" element={<AccountsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

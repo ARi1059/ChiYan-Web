@@ -8,7 +8,7 @@
  * 读路径：当前无管理端 endpoint 消费；仅测试通过 _getVisitsForTests 查回核对。
  */
 
-import { asc, sql } from "drizzle-orm";
+import { and, asc, gte, isNotNull, sql } from "drizzle-orm";
 import { schema } from "@chiyan/db";
 import { getDb } from "./db";
 
@@ -65,6 +65,50 @@ export async function recordVisit(input: {
     })
     .returning({ id: publicVisits.id });
   return { id: row!.id };
+}
+
+// ─── 看板聚合（GET /admin/stats）──────────────────────────────────
+//
+// 三个查询都吃 public_visits_created_idx / public_visits_model_created_idx。
+// "今日"窗口由 handler 传 since（UTC 当天 00:00），与 public/today 的 UTC 口径一致。
+
+/** [since, now) 的访问总数（PV）。 */
+export async function countVisitsSince(since: Date): Promise<number> {
+  const db = getDb();
+  const rows = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(publicVisits)
+    .where(gte(publicVisits.createdAt, since));
+  return rows[0]?.c ?? 0;
+}
+
+/** [since, now) 的去重访客数（UV，按 ip_hash distinct；ip_hash 为空的不计）。 */
+export async function countUniqueVisitorsSince(since: Date): Promise<number> {
+  const db = getDb();
+  const rows = await db
+    .select({ c: sql<number>`count(distinct ${publicVisits.ipHash})::int` })
+    .from(publicVisits)
+    .where(and(gte(publicVisits.createdAt, since), isNotNull(publicVisits.ipHash)));
+  return rows[0]?.c ?? 0;
+}
+
+/** [since, now) 按 model_id 聚合的访问热度，降序取前 limit（仅含带 model_id 的访问）。 */
+export async function topModelsByVisitsSince(
+  since: Date,
+  limit: number,
+): Promise<Array<{ model_id: number; visits: number }>> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      model_id: publicVisits.modelId,
+      visits: sql<number>`count(*)::int`,
+    })
+    .from(publicVisits)
+    .where(and(gte(publicVisits.createdAt, since), isNotNull(publicVisits.modelId)))
+    .groupBy(publicVisits.modelId)
+    .orderBy(sql`count(*) desc`)
+    .limit(limit);
+  return rows.map((r) => ({ model_id: r.model_id as number, visits: r.visits }));
 }
 
 export async function _getVisitsForTests(): Promise<VisitRecord[]> {

@@ -7,20 +7,40 @@
  *  - 导航项激活态用 NavLink active class
  */
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LogOut, Users, ListChecks, CalendarDays, Settings, FileClock } from "lucide-react";
+import {
+  LogOut,
+  Users,
+  ListChecks,
+  CalendarDays,
+  Settings,
+  FileClock,
+  ShieldCheck,
+  LayoutDashboard,
+} from "lucide-react";
 import { useAuth } from "../store/AuthContext";
+import type { AdminAccountRole } from "@chiyan/api-client";
 
-const NAV = [
+/** roles 省略 = 所有角色可见；列出则仅这些角色可见（与服务端 roleRequired 对齐，UI 显隐 + API 403 双保险）。 */
+const NAV: Array<{
+  to: string;
+  label: string;
+  icon: typeof Users;
+  roles?: AdminAccountRole[];
+}> = [
+  { to: "/dashboard", label: "数据看板", icon: LayoutDashboard, roles: ["owner", "admin"] },
   { to: "/models", label: "模特管理", icon: Users },
   { to: "/roster", label: "今日名单", icon: ListChecks },
   { to: "/schedule", label: "档期日历", icon: CalendarDays },
-  { to: "/audit-logs", label: "审计日志", icon: FileClock },
+  { to: "/audit-logs", label: "审计日志", icon: FileClock, roles: ["owner", "admin"] },
+  { to: "/accounts", label: "账号管理", icon: ShieldCheck, roles: ["owner"] },
   { to: "/settings", label: "工作室设置", icon: Settings },
 ];
 
 export function Layout() {
-  const { reset } = useAuth();
+  const { reset, session } = useAuth();
   const navigate = useNavigate();
+  const role = session?.role;
+  const visibleNav = NAV.filter((item) => !item.roles || (role && item.roles.includes(role)));
 
   const handleLogout = () => {
     reset();
@@ -36,7 +56,7 @@ export function Layout() {
         </div>
 
         <nav className="flex-1 py-3">
-          {NAV.map(({ to, label, icon: Icon }) => (
+          {visibleNav.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
