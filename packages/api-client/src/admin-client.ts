@@ -415,6 +415,10 @@ export interface StudioSettingsPatch {
   qq_group?: string | null;
   home_notice?: string | null;
   notice_enabled?: boolean;
+  business_hours?: {
+    weekdays: { open: string; close: string };
+    weekends?: { open: string; close: string };
+  };
   display_config?: Partial<{
     showBust: boolean;
     showAge: boolean;

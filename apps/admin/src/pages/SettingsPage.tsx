@@ -14,11 +14,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../store/AuthContext";
-import {
-  AdminApiError,
-  patchStudioSettings,
-  type StudioSettingsPatch,
-} from "@chiyan/api-client";
+import { AdminApiError, patchStudioSettings, type StudioSettingsPatch } from "@chiyan/api-client";
 
 interface BusinessHours {
   weekdays: { open: string; close: string };
@@ -79,6 +75,9 @@ const DISPLAY_LABELS: Array<[keyof DisplayConfig, string]> = [
   ["showDescription", "个人简介"],
   ["showQQNumber", "QQ 号"],
 ];
+
+/** 营业时间默认值 —— 周末从无到有时给一份合理初值，避免空字符串。 */
+const DEFAULT_WEEKEND = { open: "10:00", close: "22:00" };
 
 export function SettingsPage() {
   const { session } = useAuth();
@@ -148,6 +147,7 @@ export function SettingsPage() {
       qq_group: form.qq_group || null,
       home_notice: form.home_notice || null,
       notice_enabled: form.notice_enabled,
+      business_hours: form.business_hours,
       display_config: form.display_config,
     };
     try {
@@ -185,9 +185,7 @@ export function SettingsPage() {
         </div>
       )}
       {okMsg && (
-        <div className="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
-          {okMsg}
-        </div>
+        <div className="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{okMsg}</div>
       )}
 
       <Section title="机构信息">
@@ -204,19 +202,94 @@ export function SettingsPage() {
           <Input value={form.qq_group} onChange={(v) => setField("qq_group", v)} />
         </Row>
         <Row label="营业时间">
-          <div className="text-sm text-[var(--muted)]">
-            {formatBH(form.business_hours)}
-            <p className="text-xs mt-1">结构化编辑入口待 Phase 2 落地</p>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-[var(--muted)] w-12 shrink-0">工作日</span>
+              <TimeInput
+                value={form.business_hours.weekdays.open}
+                onChange={(v) =>
+                  setForm((p) => ({
+                    ...p,
+                    business_hours: {
+                      ...p.business_hours,
+                      weekdays: { ...p.business_hours.weekdays, open: v },
+                    },
+                  }))
+                }
+              />
+              <span className="text-[var(--muted)]">至</span>
+              <TimeInput
+                value={form.business_hours.weekdays.close}
+                onChange={(v) =>
+                  setForm((p) => ({
+                    ...p,
+                    business_hours: {
+                      ...p.business_hours,
+                      weekdays: { ...p.business_hours.weekdays, close: v },
+                    },
+                  }))
+                }
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-[var(--muted)] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!form.business_hours.weekends}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    business_hours: {
+                      weekdays: p.business_hours.weekdays,
+                      ...(e.target.checked ? { weekends: { ...DEFAULT_WEEKEND } } : {}),
+                    },
+                  }))
+                }
+              />
+              周末单独设置营业时间
+            </label>
+
+            {form.business_hours.weekends && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-[var(--muted)] w-12 shrink-0">周末</span>
+                <TimeInput
+                  value={form.business_hours.weekends.open}
+                  onChange={(v) =>
+                    setForm((p) => ({
+                      ...p,
+                      business_hours: {
+                        ...p.business_hours,
+                        weekends: { open: v, close: p.business_hours.weekends?.close ?? "" },
+                      },
+                    }))
+                  }
+                />
+                <span className="text-[var(--muted)]">至</span>
+                <TimeInput
+                  value={form.business_hours.weekends.close}
+                  onChange={(v) =>
+                    setForm((p) => ({
+                      ...p,
+                      business_hours: {
+                        ...p.business_hours,
+                        weekends: { open: p.business_hours.weekends?.open ?? "", close: v },
+                      },
+                    }))
+                  }
+                />
+              </div>
+            )}
+
+            <p className="text-xs text-[var(--muted)]">
+              H5 首页与"今日工作室"展示：{formatBH(form.business_hours)}
+            </p>
           </div>
         </Row>
       </Section>
 
       <Section title="首页公告">
         <Row label="启用">
-          <Toggle
-            value={form.notice_enabled}
-            onChange={(v) => setField("notice_enabled", v)}
-          />
+          <Toggle value={form.notice_enabled} onChange={(v) => setField("notice_enabled", v)} />
         </Row>
         {form.notice_enabled && (
           <Row label="公告内容">
@@ -236,10 +309,7 @@ export function SettingsPage() {
         </p>
         {DISPLAY_LABELS.map(([key, label]) => (
           <Row key={key} label={label}>
-            <Toggle
-              value={form.display_config[key]}
-              onChange={() => toggleDisplay(key)}
-            />
+            <Toggle value={form.display_config[key]} onChange={() => toggleDisplay(key)} />
           </Row>
         ))}
       </Section>
@@ -272,6 +342,17 @@ function Input({ value, onChange }: { value: string; onChange: (v: string) => vo
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className="w-full h-9 px-3 rounded-md border border-[var(--border)] text-sm outline-none focus:border-[var(--fg)]"
+    />
+  );
+}
+
+function TimeInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <input
+      type="time"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-9 px-2 rounded-md border border-[var(--border)] text-sm outline-none focus:border-[var(--fg)]"
     />
   );
 }
