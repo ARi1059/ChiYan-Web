@@ -587,6 +587,35 @@ export function archiveAdminModel(id: number, accessToken: string): Promise<{ ar
   return authedDelete<{ archived: true }>(`/admin/models/${id}`, accessToken);
 }
 
+// ─── 批量导入（接口方案 §4.3 POST /admin/models/batch-import，owner + admin） ──────
+//
+// 注意：服务端用 zValidator 校验整个 rows 数组 —— 任一行 schema 不合法会整批 400，
+// 不是逐行报错。逐行 errors 只覆盖运行期失败（code 冲突 40901 / 入库异常 50001）。
+// 因此调用方（BatchImportModal）必须先把每行整成 schema-clean 再发，坏行自己拦下来报告。
+
+export interface AdminBatchImportError {
+  row_index: number;
+  code: number;
+  message: string;
+}
+
+export interface AdminBatchImportResult {
+  ok_count: number;
+  error_count: number;
+  errors: AdminBatchImportError[];
+}
+
+export function batchImportModels(
+  rows: AdminCreateModelInput[],
+  accessToken: string,
+): Promise<AdminBatchImportResult> {
+  return authedPost<{ rows: AdminCreateModelInput[] }, AdminBatchImportResult>(
+    "/admin/models/batch-import",
+    { rows },
+    accessToken,
+  );
+}
+
 // ─── Roster ───────────────────────────────────────────────────────
 
 export interface AdminRosterResponse {
