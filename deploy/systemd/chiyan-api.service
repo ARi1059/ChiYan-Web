@@ -1,0 +1,48 @@
+### ChiYan API (Hono on Node 22)
+###
+### 安装：
+###   sudo cp deploy/systemd/chiyan-api.service /etc/systemd/system/
+###   sudo systemctl daemon-reload
+###   sudo systemctl enable --now chiyan-api
+###
+### 假设：
+###   - /var/www/chiyan/apps/api/dist/server.js 是 tsup build 产物
+###   - /etc/chiyan/secrets.env 是 0600 root:chiyan 的环境文件（见 deploy/secrets.env.example）
+###   - /var/chiyan/{media,logs,run} 已存在并 owner=chiyan
+###
+### 配额（2GB VPS 上分给 API ~512M）：
+###   - NODE_OPTIONS=--max-old-space-size=384 让 V8 GC 提前介入
+###   - MemoryMax=512M 是 systemd 兜底，超过就 OOM 重启而不是把整机搞挂
+
+[Unit]
+Description=ChiYan API (Hono on Node)
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+Requires=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=chiyan
+Group=chiyan
+WorkingDirectory=/var/www/chiyan/apps/api
+EnvironmentFile=/etc/chiyan/secrets.env
+Environment=NODE_ENV=production
+Environment=NODE_OPTIONS=--max-old-space-size=384
+ExecStart=/usr/bin/node dist/server.js
+Restart=on-failure
+RestartSec=3
+MemoryMax=512M
+LimitNOFILE=8192
+
+# 安全沙箱
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/chiyan/media /var/chiyan/logs /var/chiyan/run
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

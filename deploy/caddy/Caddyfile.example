@@ -1,0 +1,106 @@
+### ChiYan Caddyfile 模板
+###
+### 安装：
+###   sudo cp deploy/caddy/Caddyfile.example /etc/caddy/Caddyfile
+###   # 替换占位：
+###   #   <your-h5-domain>     生产 H5 域名（业务对外，URL obscurity）
+###   #   <your-admin-domain>  生产 Admin 域名（一般是 admin.<h5> 子域）
+###   #   <your-api-domain>    生产 API 域名（一般是 api.<h5> 子域）
+###   #   <ops-ip-1> / <ops-ip-2>  运维 + 业主出口 IPv4 / CIDR
+###   #   <email-for-cert>     Cloudflare Origin CA 联系邮箱（仅占位，不会用于 LE）
+###   sudo systemctl reload caddy
+###
+### 证书：用 Cloudflare Origin CA（15 年），私钥放 /etc/caddy/cf-origin.pem + .key
+###       0600 root:caddy；不走 Let's Encrypt 因为 CF proxied 边缘已经握住公网 TLS。
+###
+### 域名通过 1Password 共享条目传，**不在本文件留真值**——投仓后 git 历史会泄露 obscure URL。
+
+{
+    email <email-for-cert>
+    servers {
+        protocols h1 h2 h3
+    }
+    log {
+        output file /var/chiyan/logs/caddy-access.log {
+            roll_size 100mb
+            roll_keep 14
+        }
+        format json
+    }
+}
+
+# 共享 TLS 配置 — 都走 Cloudflare Origin CA
+(tls_cf) {
+    tls /etc/caddy/cf-origin.pem /etc/caddy/cf-origin.key {
+        protocols tls1.2 tls1.3
+    }
+}
+
+# ───────────────────────────────────────────────────────
+# H5 主域：静态文件 + 媒体直发
+# ───────────────────────────────────────────────────────
+<your-h5-domain> {
+    import tls_cf
+
+    root * /var/www/chiyan-h5/dist
+    encode zstd gzip
+    try_files {path} /index.html
+    file_server
+
+    # 公开媒体：cover / gallery / thumbs（不含 originals）
+    handle /media/* {
+        root * /var/chiyan
+        file_server
+        header Cache-Control "public, max-age=86400, immutable"
+        # originals 物理隔离：目录 0700 chiyan:chiyan，caddy 用户读不到
+        @originals path /media/originals/*
+        respond @originals 404
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Frame-Options DENY
+        X-Content-Type-Options nosniff
+        Referrer-Policy same-origin
+        X-Robots-Tag "noindex, nofollow, noarchive"
+    }
+}
+
+# ───────────────────────────────────────────────────────
+# Admin 子域：IP 白名单 + 严格 CSP；登录 + TOTP 在应用层
+# ───────────────────────────────────────────────────────
+<your-admin-domain> {
+    import tls_cf
+
+    @blocked not remote_ip <ops-ip-1> <ops-ip-2>
+    respond @blocked 403
+
+    root * /var/www/chiyan-admin/dist
+    encode zstd gzip
+    try_files {path} /index.html
+    file_server
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Frame-Options DENY
+        # connect-src 含 H5 域是因为 admin 可能预览 H5 资源；按需收紧
+        Content-Security-Policy "default-src 'self'; img-src 'self' https://<your-h5-domain> data:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://<your-api-domain>"
+    }
+}
+
+# ───────────────────────────────────────────────────────
+# API 子域：反代 127.0.0.1:3000（chiyan-api.service）
+# ───────────────────────────────────────────────────────
+<your-api-domain> {
+    import tls_cf
+
+    reverse_proxy 127.0.0.1:3000 {
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options nosniff
+    }
+}

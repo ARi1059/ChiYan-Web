@@ -13,9 +13,38 @@ concurrency:
 
 jobs:
   verify:
-    name: lint / typecheck / build
+    name: lint / typecheck / test / build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: chiyan
+          POSTGRES_PASSWORD: dev
+          POSTGRES_DB: chiyan_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chiyan -d chiyan_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # vitest setup 用 TEST_DATABASE_URL；不写就走默认 127.0.0.1:5432
+      TEST_DATABASE_URL: postgresql://chiyan:dev@127.0.0.1:5432/chiyan_test
 
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +61,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Enable Postgres extensions
+        # vitest setup migrate 之前必须有 pg_trgm + pgcrypto（migration 0000 依赖）
+        run: |
+          PGPASSWORD=dev psql -h 127.0.0.1 -U chiyan -d chiyan_test \
+            -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS pgcrypto'
+
       - name: Format check
         run: pnpm format:check
 
@@ -40,6 +75,9 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Test
+        run: pnpm -r test
 
       - name: Build
         run: pnpm build

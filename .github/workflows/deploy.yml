@@ -1,0 +1,130 @@
+name: deploy
+
+# 触发：push to main（CI 通过 → 自动部署），或人工 workflow_dispatch
+# 不接 PR / 不接 tag —— main 是单一真相
+#
+# 必需的 repo secrets（Settings → Secrets and variables → Actions）：
+#   DEPLOY_SSH_KEY  —  生产 deploy 用户的 ed25519 私钥（无 passphrase）
+#   DEPLOY_HOST     —  VPS 源 IP 或运维专属域名（不要写公网域，要走 CF 代理就废了 SSH）
+#   DEPLOY_USER     —  通常是 "deploy"；sudoers 仅授权 systemctl restart chiyan-api + reload caddy
+#   HEALTH_URL      —  https://<your-api-domain>/health（smoke test 用）
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 部署不抢占：上一次还在跑就排队
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: build + rsync + restart
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    # 仅在 CI 通过才跑：依赖同 commit 的 CI workflow run，CI 红就跳过这次
+    # workflow_dispatch 不走这个 gate（人工触发默认信任已绿）
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (typecheck + bundle)
+        run: pnpm -r build
+
+      - name: Compose API release tarball
+        # 把运行时需要的东西打一个 tar 传上去，比 rsync 多文件快得多
+        run: |
+          mkdir -p release/api release/h5 release/admin
+          # API: dist + package.json + node_modules（生产依赖）
+          cp -r apps/api/dist release/api/
+          cp apps/api/package.json release/api/
+          # node_modules：先生产装一次，避免把 dev deps 推上去
+          pnpm --filter @chiyan/api deploy --prod --legacy release/api/_deploy
+          cp -r release/api/_deploy/node_modules release/api/
+          rm -rf release/api/_deploy
+          # H5 + Admin: 纯静态
+          cp -r apps/h5/dist/* release/h5/
+          cp -r apps/admin/dist/* release/admin/
+          tar -czf release.tgz -C release .
+
+      - name: SSH setup
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Ship + atomic switch
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          STAMP: ${{ github.sha }}
+        run: |
+          # 1. 推 tarball
+          scp -i ~/.ssh/id_ed25519 release.tgz \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/release-$STAMP.tgz"
+
+          # 2. 远端解包 → 原子切换软链 → 重启 API + reload Caddy
+          # 注意：unquoted heredoc 里 $STAMP 由本地 runner 替换；远端要展开的写 \$
+          # deploy 用户 sudoers 仅授权 systemctl restart chiyan-api / reload caddy
+          ssh -i ~/.ssh/id_ed25519 "$DEPLOY_USER@$DEPLOY_HOST" bash -s <<EOF
+          set -euo pipefail
+          STAMP=$STAMP   # 显式注入，避免下面用错
+
+          STAGE=/tmp/release-\$STAMP-extract
+          rm -rf "\$STAGE" /var/www/chiyan/apps/api-next /var/www/chiyan-h5/dist-next /var/www/chiyan-admin/dist-next
+          mkdir -p "\$STAGE" /var/www/chiyan/apps/api-next /var/www/chiyan-h5/dist-next /var/www/chiyan-admin/dist-next
+          tar -xzf "/tmp/release-\$STAMP.tgz" -C "\$STAGE"
+          mv "\$STAGE/api/"* /var/www/chiyan/apps/api-next/
+          mv "\$STAGE/h5/"* /var/www/chiyan-h5/dist-next/
+          mv "\$STAGE/admin/"* /var/www/chiyan-admin/dist-next/
+
+          # 备份当前活动 api 到 -prev（回滚兜底）
+          if [[ -L /var/www/chiyan/apps/api ]]; then
+            rm -rf /var/www/chiyan/apps/api-prev
+            cp -a "\$(readlink -f /var/www/chiyan/apps/api)" /var/www/chiyan/apps/api-prev || true
+          fi
+
+          # 原子切换软链
+          ln -sfn /var/www/chiyan/apps/api-next /var/www/chiyan/apps/api
+          ln -sfn /var/www/chiyan-h5/dist-next /var/www/chiyan-h5/dist
+          ln -sfn /var/www/chiyan-admin/dist-next /var/www/chiyan-admin/dist
+
+          # 重启 API（systemd 重新 exec 新 dist/server.js）+ reload Caddy（重读静态根软链）
+          sudo systemctl restart chiyan-api
+          sudo systemctl reload caddy
+
+          # 清掉 /tmp
+          rm -rf "/tmp/release-\$STAMP.tgz" "\$STAGE"
+          EOF
+
+      - name: Smoke test /health (8 retries)
+        env:
+          HEALTH_URL: ${{ secrets.HEALTH_URL }}
+        run: |
+          # HEALTH_URL 默认 https://<api>/health；secret 里配满
+          for i in 1 2 3 4 5 6 7 8; do
+            if curl -fsS --max-time 10 "$HEALTH_URL"; then
+              echo "[smoke] /health OK"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "[smoke] /health failed after 8 retries"
+          exit 1
