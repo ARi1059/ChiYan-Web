@@ -4,10 +4,14 @@
  * 设计：右侧 fixed 480px Drawer + 半透明 overlay。打开/关闭由父级 ModelsPage 控制。
  * 表单一次性出全字段；保存按钮在 Drawer 顶部右侧（与 SettingsPage 风格一致）。
  *
- * 字段覆盖接口方案 §4.3 AdminCreateModelRequest 的可填子集；本轮 portfolio /
- * cooperation_history / gallery_asset_ids 都留空数组，下一轮做媒体库时再补。
+ * 字段覆盖接口方案 §4.3 AdminCreateModelRequest 的可填子集。
  *
- * 头像上传走 uploadMedia（@chiyan/api-client），拿到 media_asset_id 立刻更新预览。
+ * 媒体：
+ *  - 单图封面：cover_asset_id，旧 uploadMedia path 保留
+ *  - 多图画廊：GalleryEditor 组件管 cover 切换 + 删除 + 多文件上传
+ *  - portfolio / cooperation_history：PortfolioEditor 通用 repeater
+ *
+ * 新建模特时 modelId 还没有，画廊编辑要灰掉（提示先保存基本信息再来编画廊）。
  * 保存：新增 createAdminModel；编辑 patchAdminModel（仅含真改了的字段）。
  */
 import { useEffect, useRef, useState } from "react";
@@ -20,6 +24,8 @@ import {
   type AdminCreateModelInput,
   type AdminModelDetail,
 } from "@chiyan/api-client";
+import { GalleryEditor } from "./GalleryEditor";
+import { PortfolioEditor, type PortfolioRow } from "./PortfolioEditor";
 
 const DISTRICTS = [
   "锦江区",
@@ -69,6 +75,9 @@ interface FormState {
   is_minor: boolean;
   cover_asset_id: number | undefined;
   cover_preview_url: string | undefined;
+  gallery_asset_ids: number[];
+  portfolio: PortfolioRow[];
+  cooperation_history: PortfolioRow[];
 }
 
 const EMPTY: FormState = {
@@ -93,6 +102,9 @@ const EMPTY: FormState = {
   is_minor: false,
   cover_asset_id: undefined,
   cover_preview_url: undefined,
+  gallery_asset_ids: [],
+  portfolio: [],
+  cooperation_history: [],
 };
 
 function detailToForm(d: AdminModelDetail, coverUrl: string | undefined): FormState {
@@ -118,6 +130,9 @@ function detailToForm(d: AdminModelDetail, coverUrl: string | undefined): FormSt
     is_minor: d.is_minor,
     cover_asset_id: d.cover_asset_id,
     cover_preview_url: coverUrl,
+    gallery_asset_ids: [...d.gallery_asset_ids],
+    portfolio: d.portfolio.map((p) => ({ ...p })),
+    cooperation_history: d.cooperation_history.map((p) => ({ ...p })),
   };
 }
 
@@ -141,6 +156,9 @@ interface AdminUpdateModelInput {
   can_remote?: boolean;
   is_minor?: boolean;
   cover_asset_id?: number;
+  gallery_asset_ids?: number[];
+  portfolio?: PortfolioRow[];
+  cooperation_history?: PortfolioRow[];
 }
 
 function numOrUndef(s: string): number | undefined {
@@ -161,9 +179,9 @@ function formToCreate(f: FormState): AdminCreateModelInput {
     available_types: f.available_types,
     can_remote: f.can_remote,
     is_minor: f.is_minor,
-    gallery_asset_ids: [],
-    portfolio: [],
-    cooperation_history: [],
+    gallery_asset_ids: [...f.gallery_asset_ids],
+    portfolio: f.portfolio.map((p) => ({ ...p })),
+    cooperation_history: f.cooperation_history.map((p) => ({ ...p })),
   };
   const h = numOrUndef(f.height_cm);
   if (h !== undefined) input.height_cm = h;
@@ -234,7 +252,36 @@ function diffPatch(initial: FormState, current: FormState): Partial<AdminUpdateM
   if (current.cover_asset_id !== initial.cover_asset_id && current.cover_asset_id !== undefined) {
     p.cover_asset_id = current.cover_asset_id;
   }
+  // 数组对比：长度变或内容不同就整发新数组（API 写整覆盖语义）。
+  if (!sameNumberArray(initial.gallery_asset_ids, current.gallery_asset_ids)) {
+    p.gallery_asset_ids = current.gallery_asset_ids;
+  }
+  if (!samePortfolioArray(initial.portfolio, current.portfolio)) {
+    p.portfolio = current.portfolio;
+  }
+  if (!samePortfolioArray(initial.cooperation_history, current.cooperation_history)) {
+    p.cooperation_history = current.cooperation_history;
+  }
   return p;
+}
+
+function sameNumberArray(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+function samePortfolioArray(a: PortfolioRow[], b: PortfolioRow[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i]!;
+    const y = b[i]!;
+    if (x.brand !== y.brand) return false;
+    if (x.project !== y.project) return false;
+    if (x.year !== y.year) return false;
+    if (x.cover_asset_id !== y.cover_asset_id) return false;
+  }
+  return true;
 }
 
 interface Props {
@@ -518,6 +565,44 @@ export function ModelEditDrawer({
                 )}
               </div>
             </div>
+          </Section>
+
+          <Section title="画廊">
+            <GalleryEditor
+              modelId={initial?.id}
+              coverAssetId={form.cover_asset_id}
+              galleryAssetIds={form.gallery_asset_ids}
+              accessToken={accessToken}
+              onChange={(next) => {
+                setForm((p) => ({
+                  ...p,
+                  cover_asset_id: next.coverAssetId,
+                  // 切换封面或删除时清掉过期 preview，下次保存后父级会重读
+                  cover_preview_url:
+                    next.coverAssetId === p.cover_asset_id ? p.cover_preview_url : undefined,
+                  gallery_asset_ids: next.galleryAssetIds,
+                }));
+              }}
+              onError={(msg) => setError(msg)}
+            />
+          </Section>
+
+          <Section title="作品集（Portfolio）">
+            <PortfolioEditor
+              label="商业合作"
+              items={form.portfolio}
+              showCover={true}
+              onChange={(next) => setForm((p) => ({ ...p, portfolio: next }))}
+            />
+          </Section>
+
+          <Section title="合作历史">
+            <PortfolioEditor
+              label="过往项目"
+              items={form.cooperation_history}
+              showCover={false}
+              onChange={(next) => setForm((p) => ({ ...p, cooperation_history: next }))}
+            />
           </Section>
         </div>
       </aside>

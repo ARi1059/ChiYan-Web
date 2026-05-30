@@ -25,7 +25,6 @@ type ImageAsset = pub.ImageAsset;
 
 const models = schema.models;
 const mediaAssets = schema.mediaAssets;
-const admins = schema.admins;
 
 // ─── 公开 / 管理类型（接口签名保留） ──────────────────────────────
 

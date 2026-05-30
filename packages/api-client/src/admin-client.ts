@@ -220,6 +220,79 @@ export async function uploadMedia(
   };
 }
 
+// ─── 媒体库读写（GET 列表 / PATCH is_cover / DELETE） ──────────────
+//
+// 字段说明：与 packages/types/src/admin.ts AdminMediaSummary 对齐。
+// model_id 可空（独立素材未绑定模特时为 null）。
+
+export interface AdminMediaSummary {
+  id: number;
+  model_id: number | null;
+  type: "image" | "video";
+  url: string;
+  original_url: string | null;
+  thumb_url: string | null;
+  width: number | null;
+  height: number | null;
+  file_size: number;
+  hash: string;
+  has_watermark: boolean;
+  is_cover: boolean | null;
+  uploaded_by: number;
+  uploaded_at: string;
+}
+
+export interface AdminMediaListResponse {
+  items: AdminMediaSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface ListAdminMediaQuery {
+  model_id?: number;
+  type?: "image" | "video";
+  page?: number;
+  page_size?: number;
+}
+
+export function listAdminMedia(
+  query: ListAdminMediaQuery,
+  accessToken: string,
+): Promise<AdminMediaListResponse> {
+  const qs = new URLSearchParams();
+  if (query.model_id !== undefined) qs.set("model_id", String(query.model_id));
+  if (query.type !== undefined) qs.set("type", query.type);
+  if (query.page !== undefined) qs.set("page", String(query.page));
+  if (query.page_size !== undefined) qs.set("page_size", String(query.page_size));
+  const tail = qs.toString();
+  return authedGet<AdminMediaListResponse>(
+    `/admin/media${tail ? `?${tail}` : ""}`,
+    accessToken,
+  );
+}
+
+export interface PatchAdminMediaInput {
+  is_cover?: boolean;
+  alt?: string;
+}
+
+export function patchAdminMedia(
+  id: number,
+  patch: PatchAdminMediaInput,
+  accessToken: string,
+): Promise<AdminMediaSummary> {
+  return authedPatch<PatchAdminMediaInput, AdminMediaSummary>(
+    `/admin/media/${id}`,
+    patch,
+    accessToken,
+  );
+}
+
+export function deleteAdminMedia(id: number, accessToken: string): Promise<{ deleted: true }> {
+  return authedDelete<{ deleted: true }>(`/admin/media/${id}`, accessToken);
+}
+
 // ─── studio-settings PATCH ────────────────────────────────────────
 
 export interface StudioSettingsPatch {
@@ -374,7 +447,7 @@ export interface AdminCreateModelInput {
   is_minor: boolean;
   cover_asset_id?: number;
   gallery_asset_ids: number[];
-  portfolio: Array<{ brand: string; project?: string; year?: number }>;
+  portfolio: Array<{ brand: string; project?: string; year?: number; cover_asset_id?: number }>;
   cooperation_history: Array<{ brand: string; project?: string; year?: number }>;
 }
 
