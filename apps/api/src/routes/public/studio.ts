@@ -23,9 +23,13 @@ app.get("/", async (c) => {
     tagline: s.tagline ?? undefined,
     address: s.address ?? undefined,
     qq: s.qq,
+    qq_group: s.qq_group ?? undefined,
     phone: s.phone ?? undefined,
     business_hours: s.business_hours,
     about: s.about ?? undefined,
+    home_notice: s.home_notice ?? undefined,
+    notice_enabled: s.notice_enabled,
+    display_config: s.display_config,
   };
   c.header("Cache-Control", "public, max-age=3600, s-maxage=3600, stale-while-revalidate=300");
   c.header("Cache-Tag", "studio-info");

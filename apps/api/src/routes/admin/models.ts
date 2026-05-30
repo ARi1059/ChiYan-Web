@@ -77,8 +77,11 @@ async function serializeDetail(
   if (r.hip != null) out.hip = r.hip;
   if (r.shoe_size_eu != null) out.shoe_size_eu = r.shoe_size_eu;
   if (r.age_range) out.age_range = r.age_range;
+  if (r.age != null) out.age = r.age;
   if (r.hometown) out.hometown = r.hometown;
   if (r.city) out.city = r.city;
+  if (r.district) out.district = r.district;
+  if (r.qq) out.qq = r.qq;
   if (r.cover_asset_id != null) out.cover_asset_id = r.cover_asset_id;
   return out;
 }

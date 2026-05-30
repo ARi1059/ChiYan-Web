@@ -13,6 +13,8 @@
  * patch is_cover=true 时，repo 同步把 model.cover_asset_id 指向本条；is_cover=false
  * 时若 model.cover_asset_id 正指向本条则清零（一次调用同事务，Step 7 切真 DB 仍同事务）。
  */
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join, normalize, resolve, sep } from "node:path";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { admin as adminTypes } from "@chiyan/types";
@@ -31,10 +33,17 @@ import {
   ModelsRepoConflictError,
   type AdminMediaRecord,
 } from "../../lib/models-repo";
-import { _consumeSignedKey, signMediaUpload } from "../../lib/media-sign";
+import {
+  _consumeSignedKey,
+  _markKeyUploaded,
+  signMediaUpload,
+  verifyUploadSig,
+} from "../../lib/media-sign";
 import { csrf } from "../../middleware/csrf";
 import { fullyOnboarded } from "../../middleware/fully-onboarded";
 import { roleRequired } from "../../middleware/role-required";
+
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100MB（与 AdminMediaSignRequest size 上限对齐）
 
 const app = new Hono<AppContext>();
 
@@ -81,6 +90,63 @@ app.post(
   },
 );
 
+// ─── PUT /upload?key=...&sig=...&expires=... ──────────────────
+//
+// 二进制直传 endpoint。query 三元组：
+//   key:     sign 返回的 object_key（必须出现在路径里，sig 也覆盖它）
+//   sig:     HMAC-SHA256(JWT_SECRET, `${key}:${expires}`) base64url
+//   expires: 绝对毫秒时间戳，PUT 必须在此之前
+//
+// 防御：authRequired(全组) + fullyOnboarded + roleRequired + csrf + HMAC sig 五层。
+// 即便 sig 单独被嗅探，没有 access_token 仍打不进。
+//
+// 落盘：MEDIA_ROOT/<object_key>，路径强制 resolve 后必须仍在 MEDIA_ROOT 内（防 traversal）。
+// 落盘成功后 _markKeyUploaded —— 接下来 register 才能消费。
+const UploadQuery = z.object({
+  key: z.string().min(1).max(256),
+  sig: z.string().min(1).max(128),
+  expires: z.coerce.number().int().positive(),
+});
+
+app.put(
+  "/upload",
+  roleRequired("owner", "admin", "operator"),
+  csrf,
+  zValidator("query", UploadQuery),
+  async (c) => {
+    const { key, sig, expires } = c.req.valid("query");
+
+    // 1) HMAC + expires 校验
+    const verdict = await verifyUploadSig(c.env.JWT_SECRET, key, sig, expires);
+    if (!verdict.ok) {
+      return fail(c, 40301, "上传授权无效", { sub_code: verdict.reason });
+    }
+
+    // 2) 路径安全：MEDIA_ROOT + key 解析后必须仍在 MEDIA_ROOT 之内
+    const root = resolve(c.env.MEDIA_ROOT);
+    const target = resolve(join(root, normalize(key)));
+    if (target !== root && !target.startsWith(root + sep)) {
+      return fail(c, 40001, "object_key 路径非法", { sub_code: "bad_key" });
+    }
+
+    // 3) 读 body；超 100MB 直接拒（与 sign schema 上限对齐）
+    const buf = await c.req.arrayBuffer();
+    if (buf.byteLength === 0) return fail(c, 40001, "空文件");
+    if (buf.byteLength > MAX_UPLOAD_BYTES) {
+      return fail(c, 40001, "文件超过 100MB 上限", { sub_code: "too_large" });
+    }
+
+    // 4) 落盘
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, new Uint8Array(buf));
+
+    // 5) 标记可 register
+    _markKeyUploaded(key);
+
+    return ok(c, { object_key: key, bytes: buf.byteLength });
+  },
+);
+
 // ─── POST /register ─────────────────────────────────────────
 app.post(
   "/register",
@@ -93,9 +159,11 @@ app.post(
       return fail(c, 40001, "object_key 未签或已过期", { sub_code: "unknown_key" });
     }
     const operator = c.get("admin")!;
-    // mock URL pair：cdn / r2（Step 7 接真 R2 时换成签名 URL + bucket public/private split）
-    const url = `https://cdn-mock.local/${input.object_key}?cdn=1`;
-    const original_url = `https://r2-mock.local/${input.object_key}`;
+    // VPS 自部署：url / original_url 都指向本机 /media/<key>（同源静态服务）。
+    // Step 7 切真 CDN 时 url 改成 CDN edge，original_url 保留指向私有桶。
+    const base = c.env.API_PUBLIC_URL.replace(/\/+$/, "");
+    const url = `${base}/media/${input.object_key}`;
+    const original_url = url;
     try {
       const created = await adminCreateMedia({
         model_id: input.model_id ?? null,

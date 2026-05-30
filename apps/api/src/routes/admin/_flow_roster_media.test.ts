@@ -26,7 +26,7 @@ import { signJwt } from "../../lib/jwt";
 import { _resetJtiStoreForTests } from "../../lib/jti-store";
 import { _resetKeyRingCacheForTests } from "../../lib/keyring";
 import { _resetModelsRepoForTests } from "../../lib/models-repo";
-import { _resetMediaSignForTests } from "../../lib/media-sign";
+import { _markKeyUploaded, _resetMediaSignForTests } from "../../lib/media-sign";
 import { _resetRostersRepoForTests } from "../../lib/rosters-repo";
 import { _resetRateLimitForTests } from "../../middleware/rate-limit";
 import type { AdminRole } from "@chiyan/types";
@@ -337,6 +337,9 @@ async function signKey(token: string): Promise<string> {
     body: JSON.stringify(signBody()),
   });
   const body = (await res.json()) as { data: { object_key: string } };
+  // sign 不再自动让 register 通过；模拟"前端 PUT 上传成功"这一步，
+  // 让 register 可以消费此 key（真实集成里走 PUT /admin/media/upload）。
+  _markKeyUploaded(body.data.object_key);
   return body.data.object_key;
 }
 
@@ -358,8 +361,9 @@ describe("POST /admin/media/sign + register", () => {
       data: { id: number; url: string; original_url: string; hash: string };
     };
     expect(body.data.id).toBeGreaterThan(0);
-    expect(body.data.url).toContain("cdn-mock.local");
-    expect(body.data.original_url).toContain("r2-mock.local");
+    expect(body.data.url).toContain("/media/");
+    expect(body.data.url).toContain(key);
+    expect(body.data.original_url).toContain("/media/");
     expect(body.data.hash).toBe(HASH_A);
   });
 
@@ -418,6 +422,169 @@ describe("POST /admin/media/sign + register", () => {
     expect(replay.status).toBe(400);
     const body = (await replay.json()) as { data: { sub_code: string } };
     expect(body.data.sub_code).toBe("unknown_key");
+  });
+});
+
+describe("PUT /admin/media/upload (sign → PUT → register 端到端)", () => {
+  const MEDIA_ROOT = ENV.MEDIA_ROOT;
+
+  async function freshSign(token: string): Promise<{
+    object_key: string;
+    upload_url: string;
+    sig: string;
+    expires: string;
+  }> {
+    const res = await makeRequest("/api/v1/admin/media/sign", {
+      method: "POST",
+      token,
+      csrf: true,
+      body: JSON.stringify(signBody()),
+    });
+    const body = (await res.json()) as {
+      data: { object_key: string; upload_url: string };
+    };
+    const u = new URL(body.data.upload_url);
+    return {
+      object_key: body.data.object_key,
+      upload_url: body.data.upload_url,
+      sig: u.searchParams.get("sig")!,
+      expires: u.searchParams.get("expires")!,
+    };
+  }
+
+  beforeEach(async () => {
+    const { rm } = await import("node:fs/promises");
+    await rm(MEDIA_ROOT, { recursive: true, force: true });
+  });
+
+  it("happy path：sign → PUT 字节 → 落盘 + register 200", async () => {
+    const adminId = await seedAdmin("admin", "admin1");
+    const token = await tokenFor(adminId);
+    const { object_key, sig, expires } = await freshSign(token);
+
+    const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]); // jpeg magic prefix + 数据
+    const put = await makeRequest(
+      `/api/v1/admin/media/upload?key=${encodeURIComponent(object_key)}&sig=${sig}&expires=${expires}`,
+      {
+        method: "PUT",
+        token,
+        csrf: true,
+        headers: { "Content-Type": "application/octet-stream" },
+        body: bytes,
+      },
+    );
+    expect(put.status).toBe(200);
+    const putBody = (await put.json()) as { data: { object_key: string; bytes: number } };
+    expect(putBody.data.object_key).toBe(object_key);
+    expect(putBody.data.bytes).toBe(bytes.byteLength);
+
+    // 文件真落盘
+    const { readFile } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const onDisk = await readFile(join(MEDIA_ROOT, object_key));
+    expect(new Uint8Array(onDisk)).toEqual(bytes);
+
+    // 上传完才能 register
+    const reg = await makeRequest("/api/v1/admin/media/register", {
+      method: "POST",
+      token,
+      csrf: true,
+      body: JSON.stringify(registerBody(object_key, { hash: HASH_A })),
+    });
+    expect(reg.status).toBe(200);
+    const regBody = (await reg.json()) as { data: { url: string } };
+    expect(regBody.data.url).toContain(`/media/${object_key}`);
+  });
+
+  it("bad sig → 40301 sub_code=bad_sig", async () => {
+    const adminId = await seedAdmin("admin", "admin1");
+    const token = await tokenFor(adminId);
+    const { object_key, expires } = await freshSign(token);
+    const res = await makeRequest(
+      `/api/v1/admin/media/upload?key=${encodeURIComponent(object_key)}&sig=tampered-signature&expires=${expires}`,
+      {
+        method: "PUT",
+        token,
+        csrf: true,
+        body: new Uint8Array([1, 2, 3]),
+      },
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { data: { sub_code: string } };
+    expect(body.data.sub_code).toBe("bad_sig");
+  });
+
+  it("expires 已过 → 40301 sub_code=expired", async () => {
+    const adminId = await seedAdmin("admin", "admin1");
+    const token = await tokenFor(adminId);
+    const { object_key, sig } = await freshSign(token);
+    // 用一个过去的 expires —— 即便 sig 是另一个 expires 算的，verify 先看 expires
+    const res = await makeRequest(
+      `/api/v1/admin/media/upload?key=${encodeURIComponent(object_key)}&sig=${sig}&expires=1`,
+      {
+        method: "PUT",
+        token,
+        csrf: true,
+        body: new Uint8Array([1, 2, 3]),
+      },
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { data: { sub_code: string } };
+    expect(body.data.sub_code).toBe("expired");
+  });
+
+  it("路径遁逃 ../ → 40001 sub_code=bad_key（sig 校验通过也不让落盘）", async () => {
+    const adminId = await seedAdmin("admin", "admin1");
+    const token = await tokenFor(adminId);
+    // 故意构造越界 key 并自签 sig（攻击者会做的事）
+    const key = "../../etc/passwd";
+    const expires = String(Date.now() + 60_000);
+    // 直接借 lib 函数 produce 合法 sig 模拟 sign 被攻陷
+    const { signUploadSig } = await import("../../lib/media-sign");
+    const sig = await signUploadSig(ENV.JWT_SECRET, key, Number(expires));
+    const res = await makeRequest(
+      `/api/v1/admin/media/upload?key=${encodeURIComponent(key)}&sig=${sig}&expires=${expires}`,
+      {
+        method: "PUT",
+        token,
+        csrf: true,
+        body: new Uint8Array([1, 2, 3]),
+      },
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { data: { sub_code: string } };
+    expect(body.data.sub_code).toBe("bad_key");
+  });
+
+  it("空 body → 40001", async () => {
+    const adminId = await seedAdmin("admin", "admin1");
+    const token = await tokenFor(adminId);
+    const { object_key, sig, expires } = await freshSign(token);
+    const res = await makeRequest(
+      `/api/v1/admin/media/upload?key=${encodeURIComponent(object_key)}&sig=${sig}&expires=${expires}`,
+      {
+        method: "PUT",
+        token,
+        csrf: true,
+        body: new Uint8Array(),
+      },
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("未鉴权 → 40101（sig 单独不够）", async () => {
+    const adminId = await seedAdmin("admin", "admin1");
+    const token = await tokenFor(adminId);
+    const { object_key, sig, expires } = await freshSign(token);
+    const res = await makeRequest(
+      `/api/v1/admin/media/upload?key=${encodeURIComponent(object_key)}&sig=${sig}&expires=${expires}`,
+      {
+        method: "PUT",
+        // 不带 token / 不带 csrf
+        body: new Uint8Array([1]),
+      },
+    );
+    expect(res.status).toBe(401);
   });
 });
 
